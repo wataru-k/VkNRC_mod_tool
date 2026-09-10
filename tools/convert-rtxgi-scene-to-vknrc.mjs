@@ -2,17 +2,26 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 function fail(message) {
   process.stderr.write(`error: ${message}\n`);
   process.exit(1);
 }
 
-if (process.argv.length !== 4)
-  fail("usage: node tools/convert-rtxgi-scene-to-vknrc.mjs <scene.json> <output.obj>");
+const args = process.argv.slice(2);
+let texconvPath = null;
+const texconvIndex = args.indexOf("--texconv");
+if (texconvIndex !== -1) {
+  if (!args[texconvIndex + 1]) fail("--texconv requires an executable path");
+  texconvPath = path.resolve(args[texconvIndex + 1]);
+  args.splice(texconvIndex, 2);
+}
+if (args.length !== 2)
+  fail("usage: node tools/convert-rtxgi-scene-to-vknrc.mjs <scene.json> <output.obj> [--texconv <texconv.exe>]");
 
-const scenePath = path.resolve(process.argv[2]);
-const outputPath = path.resolve(process.argv[3]);
+const scenePath = path.resolve(args[0]);
+const outputPath = path.resolve(args[1]);
 const outputDir = path.dirname(outputPath);
 const outputStem = path.parse(outputPath).name;
 const mtlPath = path.join(outputDir, `${outputStem}.mtl`);
@@ -138,13 +147,29 @@ function textureSource(ctx, textureInfo) {
 const copiedTextures = new Map();
 function copyTexture(source, modelIndex) {
   if (!source) return null;
-  const extension = path.extname(source).toLowerCase();
-  if (![".jpg", ".jpeg", ".png", ".tga", ".bmp"].includes(extension))
-    fail(`unsupported texture ${source}; convert it to a stb_image format first`);
   if (copiedTextures.has(source)) return copiedTextures.get(source);
-  const targetName = `model_${modelIndex}_${copiedTextures.size}${extension}`;
+  const extension = path.extname(source).toLowerCase();
+  const outputExtension = extension === ".dds" ? ".png" : extension;
+  if (![".jpg", ".jpeg", ".png", ".tga", ".bmp", ".dds"].includes(extension))
+    fail(`unsupported texture ${source}`);
+  const targetName = `model_${modelIndex}_${copiedTextures.size}${outputExtension}`;
   const target = path.join(textureDir, targetName);
-  fs.copyFileSync(source, target);
+  if (extension === ".dds") {
+    if (!texconvPath || !fs.existsSync(texconvPath))
+      fail(`DDS texture requires --texconv <texconv.exe>: ${source}`);
+    const temporaryDir = path.join(textureDir, `_texconv_${copiedTextures.size}`);
+    fs.mkdirSync(temporaryDir, { recursive: true });
+    const result = spawnSync(texconvPath, ["-y", "-ft", "png", "-o", temporaryDir, source],
+      { encoding: "utf8", windowsHide: true });
+    if (result.status !== 0)
+      fail(`texconv failed for ${source}: ${result.stderr || result.stdout}`);
+    const converted = fs.readdirSync(temporaryDir).find((name) => path.extname(name).toLowerCase() === ".png");
+    if (!converted) fail(`texconv produced no PNG for ${source}`);
+    fs.renameSync(path.join(temporaryDir, converted), target);
+    fs.rmSync(temporaryDir, { recursive: true, force: true });
+  } else {
+    fs.copyFileSync(source, target);
+  }
   const relative = path.relative(outputDir, target).replaceAll("\\", "/");
   copiedTextures.set(source, relative);
   return relative;
@@ -278,6 +303,15 @@ const manifest = {
     exposureCompensation: cameraEntry.exposureCompensation,
     exposureValue: cameraEntry.exposureValue,
   } : null,
+  directionalLights: scene.graph.flatMap((entry) => entry.children ?? [])
+    .filter((entry) => entry.type === "DirectionalLight")
+    .map((entry) => ({
+      name: entry.name,
+      radianceScale: entry.radianceScale,
+      angularSize: entry.angularSize,
+      translation: entry.translation,
+      rotation: entry.rotation,
+    })),
 };
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 process.stdout.write(JSON.stringify(manifest, null, 2) + "\n");
