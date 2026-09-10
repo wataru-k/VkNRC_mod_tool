@@ -27,6 +27,15 @@ layout(binding = 12, rg32f) readonly uniform image2D uFactorGB;
 layout(std430, binding = 13) buffer uuBatchTrainRecords { NRCTrainRecord records[]; }
 uBatchTrainRecords[NRC_TRAIN_BATCH_COUNT];
 
+layout(std430, binding = 14) buffer uuWhiteoutCounters {
+	uint invalid_count, overbright_count, max_luminance_bits, evaluated_count;
+};
+
+layout(push_constant) uniform uuPushConstant {
+	uint uWhiteoutDiagnostic, uWhiteoutGuard;
+	float uWhiteoutLuminanceThreshold;
+};
+
 void main() {
 	uint dst = NRC_EVAL_INVALID_DST;
 	uvec4 inputs[8];
@@ -45,7 +54,22 @@ void main() {
 	NNForward64_ReLU(3, act_coopmats[1], act_coopmats[0]);
 	NNForward64_ReLU(4, act_coopmats[0], act_coopmats[1]);
 	NNForward3(5, act_coopmats[1], act_coopmats[0][0]);
-	vec3 predict = max(NNOutput3(act_coopmats[0][0]), vec3(0));
+	vec3 raw_predict = NNOutput3(act_coopmats[0][0]);
+	bool invalid_predict = any(isnan(raw_predict)) || any(isinf(raw_predict));
+	vec3 predict = invalid_predict ? vec3(0) : max(raw_predict, vec3(0));
+	float predict_luminance = dot(vec3(0.212671, 0.715160, 0.072169), predict);
+	bool overbright_predict = predict_luminance > uWhiteoutLuminanceThreshold;
+	if (dst != NRC_EVAL_INVALID_DST) {
+		atomicAdd(evaluated_count, 1);
+		if (invalid_predict)
+			atomicAdd(invalid_count, 1);
+		else
+			atomicMax(max_luminance_bits, floatBitsToUint(predict_luminance));
+		if (overbright_predict)
+			atomicAdd(overbright_count, 1);
+	}
+	if (uWhiteoutGuard != 0 && overbright_predict)
+		predict *= uWhiteoutLuminanceThreshold / predict_luminance;
 
 	if (dst == NRC_EVAL_INVALID_DST)
 		return;
@@ -56,6 +80,8 @@ void main() {
 		vec4 bias_factor_r = imageLoad(uBias_FactorR, coord);
 		vec2 factor_gb = imageLoad(uFactorGB, coord).rg;
 		vec3 color = bias_factor_r.rgb + vec3(bias_factor_r.a, factor_gb) * predict;
+		if (uWhiteoutDiagnostic != 0)
+			color = invalid_predict ? vec3(1, 0, 1) : (overbright_predict ? vec3(1, 0, 0) : color);
 		imageStore(uBias_FactorR, coord, vec4(color, 0));
 	} else {
 		// Write to Train Records

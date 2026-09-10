@@ -1,0 +1,5 @@
+/build*/
+/shader/include/
+.vs/
+*.user
+imgui.ini

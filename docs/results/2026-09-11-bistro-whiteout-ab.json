@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-11T04:07:37.7206192+09:00",
+  "commit": "79e0863d0ad44371b91b4891b805c08f441dfd7d",
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "driver": "616.56",
+  "scene": "build-vs/scenes/bistro/bistro.obj",
+  "sceneSha256": "793CD18BCD76FAA116DEC443A840F9B2169D6B85D5604E17F8A2D0C1B423BC92",
+  "texturesOmitted": true,
+  "frames": 3600,
+  "threshold": 100.0,
+  "seed": 1,
+  "results": [
+    {
+      "guard": false,
+      "evaluated": 3135181071,
+      "nonfinite": 0,
+      "overThreshold": 0,
+      "maxLuminance": 18.23156,
+      "exitCode": 0
+    },
+    {
+      "guard": true,
+      "evaluated": 3135181544,
+      "nonfinite": 0,
+      "overThreshold": 0,
+      "maxLuminance": 18.716967,
+      "exitCode": 0
+    }
+  ]
+}
+

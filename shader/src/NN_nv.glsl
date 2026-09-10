@@ -309,9 +309,9 @@ void NNUpdateDW3(in const uint layer,
 		const uint kWeightFP16Base = layer * WEIGHT_64_COUNT + gl_LocalInvocationID.x * FP16_PER_UV4;
 		[[unroll]] for (uint i = 0; i < FP16_PER_UV4 / 2; ++i) {
 			atomicAdd(uDWeights[kWeightFP16Base + (i << 1u)], d_w[i].x, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer,
-			          gl_SemanticsRelaxed);
+			          gl_SemanticsAcquireRelease);
 			atomicAdd(uDWeights[kWeightFP16Base + (i << 1u | 1u)], d_w[i].y, gl_ScopeQueueFamily,
-			          gl_StorageSemanticsBuffer, gl_SemanticsRelaxed);
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 		}
 	}
 }
@@ -359,9 +359,9 @@ void NNUpdateDW64(in const uint layer,
 		const uint kWeightFP16Base = (kWeightUV4Base + u) * FP16_PER_UV4;
 		[[unroll]] for (uint i = 0; i < (FP16_PER_UV4 / 2); ++i) {
 			atomicAdd(uDWeights[kWeightFP16Base + (i << 1u)], d_w[u][i].x, gl_ScopeQueueFamily,
-			          gl_StorageSemanticsBuffer, gl_SemanticsRelaxed);
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 			atomicAdd(uDWeights[kWeightFP16Base + (i << 1u | 1u)], d_w[u][i].y, gl_ScopeQueueFamily,
-			          gl_StorageSemanticsBuffer, gl_SemanticsRelaxed);
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 		}
 	}
 }

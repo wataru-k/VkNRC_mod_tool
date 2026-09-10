@@ -17,14 +17,16 @@ class NNInference final : public myvk_rg::ComputePassBase {
 public:
 	struct Args {
 		const myvk::Ptr<VkScene> &scene_ptr;
+		const myvk::Ptr<VkNRCState> &nrc_state_ptr;
 		const SceneResources &scene_resources;
 		const myvk_rg::Image &bias_factor_r, &factor_gb;
-		const myvk_rg::Buffer &weights, &eval_count, &eval_records;
+		const myvk_rg::Buffer &weights, &eval_count, &eval_records, &whiteout_counters;
 		std::span<const myvk_rg::Buffer, VkNRCState::GetTrainBatchCount()> batch_train_records;
 	};
 
 private:
 	myvk::Ptr<VkScene> m_scene_ptr;
+	myvk::Ptr<VkNRCState> m_nrc_state_ptr;
 
 public:
 	NNInference(myvk_rg::Parent parent, const myvk_rg::Buffer &cmd, const Args &args);
@@ -32,6 +34,7 @@ public:
 	myvk::Ptr<myvk::ComputePipeline> CreatePipeline() const final;
 	void CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const final;
 	inline auto GetColorOutput() const { return MakeImageOutput({"base_extra_r"}); }
+	inline auto GetWhiteoutCountersOutput() const { return MakeBufferOutput({"whiteout_counters"}); }
 	inline auto GetBatchTrainRecordsOutput(uint32_t batch_index) const {
 		return MakeBufferOutput({"batch_train_records", batch_index});
 	}

@@ -63,25 +63,26 @@ void Dependency::traverse_pass(const Args &args, const PassBase *p_pass) {
 				    m_resource_graph.AddVertex(p_resource);
 				    get_dep_info(p_input).p_resource = p_resource;
 
-				    p_resource->Visit(overloaded(
-				        [&](const CombinedResource auto *p_combined_resource) {
-					        for (const OutputAlias auto &src_alias : p_combined_resource->GetSubAliases()) {
-						        const InputBase *p_src_input = traverse_output_alias(args, src_alias);
-						        const PassBase *p_src_pass = get_dep_info(p_src_input).p_pass;
-						        const ResourceBase *p_sub_resource = get_dep_info(p_src_input).p_resource;
+				    p_resource->Visit([&](const auto *p_visited_resource) {
+					    using Resource = std::remove_cv_t<std::remove_pointer_t<decltype(p_visited_resource)>>;
+					    if constexpr (CombinedResource<Resource>) {
+						    for (const OutputAlias auto &src_alias : p_visited_resource->GetSubAliases()) {
+							    const InputBase *p_src_input = traverse_output_alias(args, src_alias);
+							    const PassBase *p_src_pass = get_dep_info(p_src_input).p_pass;
+							    const ResourceBase *p_sub_resource = get_dep_info(p_src_input).p_resource;
 
-						        // This means p_src_pass is present in the stack, so a cycle exists
-						        if (!p_sub_resource)
-							        Throw(error::PassNotDAG{});
+							    // This means p_src_pass is present in the stack, so a cycle exists
+							    if (!p_sub_resource)
+								    Throw(error::PassNotDAG{});
 
-						        m_pass_graph.AddEdge(p_src_pass, p_pass,
-						                             PassEdge{p_src_input, p_input, p_sub_resource});
-						        m_resource_graph.AddEdge(p_resource, p_sub_resource, {});
-					        }
-				        },
-				        [&](auto &&) {
-					        m_pass_graph.AddEdge(nullptr, p_pass, PassEdge{nullptr, p_input, p_resource});
-				        }));
+							    m_pass_graph.AddEdge(p_src_pass, p_pass,
+							                         PassEdge{p_src_input, p_input, p_sub_resource});
+							    m_resource_graph.AddEdge(p_resource, p_sub_resource, {});
+						    }
+					    } else {
+						    m_pass_graph.AddEdge(nullptr, p_pass, PassEdge{nullptr, p_input, p_resource});
+					    }
+				    });
 			    }));
 		}
 	};
