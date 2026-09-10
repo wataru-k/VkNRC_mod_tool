@@ -54,6 +54,8 @@ NNInference::NNInference(myvk_rg::Parent parent, const myvk_rg::Buffer &cmd, con
 		AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
 		    {13, b}, {"batch_train_records", b}, args.batch_train_records[b]);
 	}
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {14}, {"whiteout_counters"}, args.whiteout_counters);
 }
 
 myvk::Ptr<myvk::ComputePipeline> NNInference::CreatePipeline() const {

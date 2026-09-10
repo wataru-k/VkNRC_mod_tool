@@ -53,7 +53,11 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
 	                      .weights = nrc_resources.use_weights,
 	                      .eval_count = path_tracer_pass->GetEvalCountOutput(),
 	                      .eval_records = path_tracer_pass->GetEvalRecordsOutput(),
+	                      .whiteout_counters = CreateResource<myvk_rg::ManagedBuffer>(
+	                                                {"whiteout_counters"}, sizeof(WhiteoutCounters))
+	                                                ->Alias(),
 	                      .batch_train_records = path_tracer_pass->GetBatchTrainRecordsOutputs()});
+	GetResource<myvk_rg::ManagedBuffer>({"whiteout_counters"})->SetMapped(true);
 
 	for (uint32_t b = 0; b < VkNRCState::GetTrainBatchCount(); ++b) {
 		myvk_rg::Buffer weights = nrc_resources.weights, optimizer_entries = nrc_resources.optimizer_entries,
@@ -109,8 +113,16 @@ void NRCRenderGraph::PreExecute() const {
 	// Update Mapped Internals
 	m_scene_ptr->UpdateTransformBuffer(GetResource<myvk_rg::ManagedBuffer>({"transforms"})->GetMappedData());
 	*GetResource<myvk_rg::ManagedBuffer>({"eval_count"})->GetMappedData<uint32_t>() = 0u;
+	if (!m_whiteout_counters_initialized) {
+		*GetResource<myvk_rg::ManagedBuffer>({"whiteout_counters"})->GetMappedData<WhiteoutCounters>() = {};
+		m_whiteout_counters_initialized = true;
+	}
 	for (uint32_t b = 0; b < VkNRCState::GetTrainBatchCount(); ++b)
 		*GetResource<myvk_rg::ManagedBuffer>({"batch_train_count", b})->GetMappedData<uint32_t>() = 0u;
+}
+
+NRCRenderGraph::WhiteoutCounters NRCRenderGraph::GetWhiteoutCounters() const {
+	return *GetResource<myvk_rg::ManagedBuffer>({"whiteout_counters"})->GetMappedData<WhiteoutCounters>();
 }
 
 SceneResources NRCRenderGraph::create_scene_resources() {

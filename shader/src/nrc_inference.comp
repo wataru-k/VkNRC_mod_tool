@@ -27,6 +27,10 @@ layout(binding = 12, rg32f) readonly uniform image2D uFactorGB;
 layout(std430, binding = 13) buffer uuBatchTrainRecords { NRCTrainRecord records[]; }
 uBatchTrainRecords[NRC_TRAIN_BATCH_COUNT];
 
+layout(std430, binding = 14) buffer uuWhiteoutCounters {
+	uint invalid_count, overbright_count, max_luminance_bits, evaluated_count;
+};
+
 layout(push_constant) uniform uuPushConstant {
 	uint uWhiteoutDiagnostic, uWhiteoutGuard;
 	float uWhiteoutLuminanceThreshold;
@@ -55,6 +59,15 @@ void main() {
 	vec3 predict = invalid_predict ? vec3(0) : max(raw_predict, vec3(0));
 	float predict_luminance = dot(vec3(0.212671, 0.715160, 0.072169), predict);
 	bool overbright_predict = predict_luminance > uWhiteoutLuminanceThreshold;
+	if (dst != NRC_EVAL_INVALID_DST) {
+		atomicAdd(evaluated_count, 1);
+		if (invalid_predict)
+			atomicAdd(invalid_count, 1);
+		else
+			atomicMax(max_luminance_bits, floatBitsToUint(predict_luminance));
+		if (overbright_predict)
+			atomicAdd(overbright_count, 1);
+	}
 	if (uWhiteoutGuard != 0 && overbright_predict)
 		predict *= uWhiteoutLuminanceThreshold / predict_luminance;
 

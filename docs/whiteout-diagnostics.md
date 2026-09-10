@@ -35,6 +35,10 @@ repeatable unattended runs:
 
 Add `--whiteout-guard` only for an A/B guard run. The command-line settings are
 also reflected in the UI and may be changed while the application is running.
+On clean shutdown, VkNRC logs the total evaluated predictions, non-finite
+predictions, predictions over the selected threshold, and the maximum finite
+prediction luminance. These counters are collected on the GPU and make a fixed
+frame run machine-verifiable without relying only on a screenshot.
 
 ## Experiment protocol
 

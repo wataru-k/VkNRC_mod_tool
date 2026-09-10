@@ -17,10 +17,16 @@
 namespace rg {
 
 class NRCRenderGraph final : public myvk_rg::RenderGraphBase {
+public:
+	struct WhiteoutCounters {
+		uint32_t invalid_count, overbright_count, max_luminance_bits, evaluated_count;
+	};
+
 private:
 	myvk::Ptr<VkSceneTLAS> m_scene_tlas_ptr;
 	myvk::Ptr<VkScene> m_scene_ptr;
 	myvk::Ptr<VkNRCState> m_nrc_state_ptr;
+	mutable bool m_whiteout_counters_initialized{false};
 
 	SceneResources create_scene_resources();
 	NRCResources create_nrc_resources();
@@ -31,6 +37,7 @@ public:
 	                        const myvk::Ptr<Camera> &camera_ptr);
 	~NRCRenderGraph() final = default;
 	void PreExecute() const final;
+	WhiteoutCounters GetWhiteoutCounters() const;
 };
 
 } // namespace rg

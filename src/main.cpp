@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <bit>
+#include <algorithm>
 
 #include "rg/NRCRenderGraph.hpp"
 
@@ -232,6 +234,17 @@ int main(int argc, char **argv) {
 	}
 
 	frame_manager->WaitIdle();
+	uint64_t invalid_count = 0, overbright_count = 0, evaluated_count = 0;
+	float max_luminance = 0.0f;
+	for (const auto &render_graph : render_graphs) {
+		auto counters = render_graph->GetWhiteoutCounters();
+		invalid_count += counters.invalid_count;
+		overbright_count += counters.overbright_count;
+		evaluated_count += counters.evaluated_count;
+		max_luminance = std::max(max_luminance, std::bit_cast<float>(counters.max_luminance_bits));
+	}
+	spdlog::info("Whiteout counters: evaluated={}, nonfinite={}, over-threshold={}, max-luminance={}",
+	             evaluated_count, invalid_count, overbright_count, max_luminance);
 	glfwTerminate();
 	return 0;
 }
