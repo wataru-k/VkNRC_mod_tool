@@ -54,3 +54,7 @@ frame run machine-verifiable without relying only on a screenshot.
 The guard is a diagnostic safety mechanism, not a production fix. A per-query
 luminance cap can introduce dark bias, and a successful run on one scene or GPU
 does not establish general stability.
+
+## Recorded results
+
+- [RTX 4090 closed-room smoke A/B, 2026-09-11](results/2026-09-11-whiteout-smoke.md)

@@ -1,0 +1,27 @@
+mtllib smoke.mtl
+o smoke_room
+v -1.0 -1.0 -1.0
+v  1.0 -1.0 -1.0
+v  1.0  1.0 -1.0
+v -1.0  1.0 -1.0
+v -1.0 -1.0  1.0
+v  1.0 -1.0  1.0
+v  1.0  1.0  1.0
+v -1.0  1.0  1.0
+vn 0.0 0.0 1.0
+usemtl matte
+# Closed room around the default camera. It keeps sampled paths inside long
+# enough to exercise NRC inference and bootstrap training.
+f 1//1 2//1 3//1
+f 1//1 3//1 4//1
+f 6//1 5//1 8//1
+f 6//1 8//1 7//1
+f 5//1 1//1 4//1
+f 5//1 4//1 8//1
+f 2//1 6//1 7//1
+f 2//1 7//1 3//1
+f 4//1 3//1 7//1
+f 4//1 7//1 8//1
+f 5//1 6//1 2//1
+f 5//1 2//1 1//1
+
