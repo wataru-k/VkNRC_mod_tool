@@ -30,6 +30,7 @@ repeatable unattended runs:
 .\build-vs\Release\VkNRC.exe scene.obj `
   --whiteout-diagnostic `
   --whiteout-threshold 100 `
+  --seed 1 `
   --frames 3600
 ```
 
@@ -39,6 +40,32 @@ On clean shutdown, VkNRC logs the total evaluated predictions, non-finite
 predictions, predictions over the selected threshold, and the maximum finite
 prediction luminance. These counters are collected on the GPU and make a fixed
 frame run machine-verifiable without relying only on a screenshot.
+
+Use the same `--seed` value for guard-off and guard-on runs. It fixes both MLP
+weight initialization and the per-frame random seed sequence, making the A/B
+runs directly comparable. If omitted, VkNRC selects and logs a random seed.
+
+The two-run wrapper records both logs and a parsed `summary.json`:
+
+```powershell
+.\tools\run-whiteout-ab.ps1 `
+  -Scene .\test\scenes\whiteout-smoke\smoke.obj `
+  -Frames 3600 -Threshold 100 -Seed 1
+```
+
+VkNRC accepts OBJ input only. For a glTF asset such as the RTXGI Bistro scene,
+prepare a geometry-only OBJ without using the GPU:
+
+```powershell
+node .\tools\convert-gltf-to-vknrc-obj.mjs `
+  E:\RTXGI_mod_tool_4\Assets\Media\Bistro\bistro.gltf `
+  .\build-vs\scenes\bistro\bistro.obj
+```
+
+The converter expands glTF node transforms and instances into OBJ geometry and
+retains constant material factors. It deliberately omits DDS textures because
+VkNRC's current stb_image-based OBJ path cannot load them. Results from this
+conversion therefore test whiteout stability, not texture-faithful image quality.
 
 ## Experiment protocol
 
@@ -58,3 +85,4 @@ does not establish general stability.
 ## Recorded results
 
 - [RTX 4090 closed-room smoke A/B, 2026-09-11](results/2026-09-11-whiteout-smoke.md)
+- [Bistro GPU-run preparation, 2026-09-11](results/2026-09-11-bistro-preparation.md)

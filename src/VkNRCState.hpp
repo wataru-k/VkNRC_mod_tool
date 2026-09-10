@@ -11,6 +11,7 @@
 #include <myvk/Buffer.hpp>
 #include <myvk/Image.hpp>
 #include <myvk/ImageView.hpp>
+#include <optional>
 #include <random>
 #include <span>
 
@@ -29,7 +30,8 @@ private:
 	myvk::Ptr<myvk::Buffer> m_weights, m_use_weights, m_optimizer_state, m_optimizer_entries;
 	myvk::Ptr<myvk::ImageView> m_accumulate_view;
 	uint32_t m_seed{};
-	std::mt19937 m_rng{std::random_device{}()};
+	uint32_t m_rng_seed;
+	std::mt19937 m_rng;
 	Method m_left_method{kNRC}, m_right_method{kNRC};
 	bool m_accumulate{false};
 	uint32_t m_accumulate_count{0};
@@ -41,7 +43,9 @@ private:
 	void initialize_weights(std::span<float, kNNWeighCount> weights);
 
 public:
-	inline VkNRCState(const myvk::Ptr<myvk::Queue> &queue_ptr, VkExtent2D extent) : m_queue_ptr(queue_ptr) {
+	inline VkNRCState(const myvk::Ptr<myvk::Queue> &queue_ptr, VkExtent2D extent,
+	                  std::optional<uint32_t> rng_seed = std::nullopt)
+	    : m_queue_ptr(queue_ptr), m_rng_seed(rng_seed.value_or(std::random_device{}())), m_rng(m_rng_seed) {
 		ResetAccumulateImage(extent);
 		ResetMLPBuffers();
 	}
@@ -78,6 +82,7 @@ public:
 	inline void SetTrainProbability(float train_probability) { m_train_probability = train_probability; }
 
 	inline uint32_t GetSeed() const { return m_seed; }
+	inline uint32_t GetRNGSeed() const { return m_rng_seed; }
 
 	inline void NextFrame() {
 		if (m_accumulate)

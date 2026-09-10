@@ -9,6 +9,8 @@
 #include <cstring>
 #include <bit>
 #include <algorithm>
+#include <limits>
+#include <optional>
 
 #include "rg/NRCRenderGraph.hpp"
 
@@ -23,6 +25,7 @@ int main(int argc, char **argv) {
 	bool command_line_whiteout_diagnostic = false, command_line_whiteout_guard = false;
 	float command_line_whiteout_threshold = 100.0f;
 	uint64_t command_line_frame_limit = 0;
+	std::optional<uint32_t> command_line_seed;
 	for (int i = 2; i < argc; ++i) {
 		if (std::strcmp(argv[i], "--whiteout-diagnostic") == 0) {
 			command_line_whiteout_diagnostic = true;
@@ -43,6 +46,14 @@ int main(int argc, char **argv) {
 				spdlog::error("Invalid --frames value: {}", argv[i]);
 				return EXIT_FAILURE;
 			}
+		} else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
+			char *end = nullptr;
+			uint64_t parsed_seed = std::strtoull(argv[++i], &end, 10);
+			if (end == argv[i] || *end != '\0' || parsed_seed > std::numeric_limits<uint32_t>::max()) {
+				spdlog::error("Invalid --seed value: {}", argv[i]);
+				return EXIT_FAILURE;
+			}
+			command_line_seed = static_cast<uint32_t>(parsed_seed);
 		} else {
 			spdlog::error("Unknown or incomplete option: {}", argv[i]);
 			return EXIT_FAILURE;
@@ -113,12 +124,13 @@ int main(int argc, char **argv) {
 	auto vk_scene = myvk::MakePtr<VkScene>(generic_queue, scene);
 	auto vk_scene_blas = myvk::MakePtr<VkSceneBLAS>(vk_scene);
 	auto vk_scene_tlas = myvk::MakePtr<VkSceneTLAS>(vk_scene_blas);
-	auto vk_nrc_state = myvk::MakePtr<VkNRCState>(generic_queue, VkExtent2D{kWidth, kHeight});
+	auto vk_nrc_state = myvk::MakePtr<VkNRCState>(generic_queue, VkExtent2D{kWidth, kHeight}, command_line_seed);
 	vk_nrc_state->SetWhiteoutDiagnostic(command_line_whiteout_diagnostic);
 	vk_nrc_state->SetWhiteoutGuard(command_line_whiteout_guard);
 	vk_nrc_state->SetWhiteoutLuminanceThreshold(command_line_whiteout_threshold);
 	spdlog::info("Whiteout diagnostic: {}, guard: {}, luminance threshold: {}",
 	             command_line_whiteout_diagnostic, command_line_whiteout_guard, command_line_whiteout_threshold);
+	spdlog::info("RNG seed: {}", vk_nrc_state->GetRNGSeed());
 
 	auto frame_manager = myvk::FrameManager::Create(generic_queue, present_queue, false, kFrameCount);
 	frame_manager->SetResizeFunc([&](VkExtent2D extent) {
