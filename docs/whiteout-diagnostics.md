@@ -89,3 +89,5 @@ does not establish general stability.
 - [RTX 4090 closed-room smoke A/B, 2026-09-11](results/2026-09-11-whiteout-smoke.md)
 - [Bistro GPU-run preparation, 2026-09-11](results/2026-09-11-bistro-preparation.md)
 - [RTX 4090 Bistro fixed-seed A/B, 2026-09-11](results/2026-09-11-bistro-whiteout-ab.md)
+- [LivingRoom port CPU preparation, 2026-09-11](results/2026-09-11-living-room-preparation.md)
+- [RTX 4090 LivingRoom fixed-seed A/B, 2026-09-11](results/2026-09-11-living-room-whiteout-ab.md)

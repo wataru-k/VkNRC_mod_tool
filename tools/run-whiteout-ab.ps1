@@ -22,6 +22,18 @@ if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $repoRoot "build-vs\whiteout-results\$stamp"
 }
 $outputPath = New-Item -ItemType Directory -Force -Path $OutputDirectory
+$manifestPath = [IO.Path]::ChangeExtension($scenePath, '.vknrc.json')
+$cameraArguments = @()
+if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+    $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+    if ($manifest.camera) {
+        $position = $manifest.camera.normalizedPosition
+        $cameraArguments = @(
+            '--camera-position', $position[0], $position[1], $position[2],
+            '--camera-fov', $manifest.camera.verticalFov
+        )
+    }
+}
 
 function Invoke-WhiteoutRun {
     param([bool]$Guard)
@@ -37,6 +49,7 @@ function Invoke-WhiteoutRun {
         '--frames', $Frames
     )
     if ($Guard) { $arguments += '--whiteout-guard' }
+    $arguments += $cameraArguments
 
     $process = Start-Process -FilePath $exe -ArgumentList $arguments `
         -WorkingDirectory $repoRoot -RedirectStandardOutput $stdout `
@@ -71,6 +84,7 @@ $results = @(
 $summary = [pscustomobject]@{
     scene = $scenePath
     executable = $exe
+    sceneManifest = if (Test-Path -LiteralPath $manifestPath) { $manifestPath } else { $null }
     generatedAt = (Get-Date).ToString('o')
     results = $results
 }

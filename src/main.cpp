@@ -26,9 +26,23 @@ int main(int argc, char **argv) {
 	float command_line_whiteout_threshold = 100.0f;
 	uint64_t command_line_frame_limit = 0;
 	std::optional<uint32_t> command_line_seed;
+	std::optional<glm::vec3> command_line_camera_position;
+	std::optional<float> command_line_camera_yaw, command_line_camera_pitch, command_line_camera_fov;
+	bool command_line_validate_scene_only = false;
+	const auto parse_float = [](const char *value, const char *option) {
+		char *end = nullptr;
+		float parsed = std::strtof(value, &end);
+		if (end == value || *end != '\0' || !std::isfinite(parsed)) {
+			spdlog::error("Invalid {} value: {}", option, value);
+			std::exit(EXIT_FAILURE);
+		}
+		return parsed;
+	};
 	for (int i = 2; i < argc; ++i) {
 		if (std::strcmp(argv[i], "--whiteout-diagnostic") == 0) {
 			command_line_whiteout_diagnostic = true;
+		} else if (std::strcmp(argv[i], "--validate-scene-only") == 0) {
+			command_line_validate_scene_only = true;
 		} else if (std::strcmp(argv[i], "--whiteout-guard") == 0) {
 			command_line_whiteout_guard = true;
 		} else if (std::strcmp(argv[i], "--whiteout-threshold") == 0 && i + 1 < argc) {
@@ -54,19 +68,37 @@ int main(int argc, char **argv) {
 				return EXIT_FAILURE;
 			}
 			command_line_seed = static_cast<uint32_t>(parsed_seed);
+		} else if (std::strcmp(argv[i], "--camera-position") == 0 && i + 3 < argc) {
+			command_line_camera_position = glm::vec3{parse_float(argv[++i], "--camera-position"),
+			                                                parse_float(argv[++i], "--camera-position"),
+			                                                parse_float(argv[++i], "--camera-position")};
+		} else if (std::strcmp(argv[i], "--camera-yaw") == 0 && i + 1 < argc) {
+			command_line_camera_yaw = parse_float(argv[++i], "--camera-yaw");
+		} else if (std::strcmp(argv[i], "--camera-pitch") == 0 && i + 1 < argc) {
+			command_line_camera_pitch = parse_float(argv[++i], "--camera-pitch");
+		} else if (std::strcmp(argv[i], "--camera-fov") == 0 && i + 1 < argc) {
+			command_line_camera_fov = parse_float(argv[++i], "--camera-fov");
+			if (*command_line_camera_fov <= 0.0f || *command_line_camera_fov >= glm::pi<float>()) {
+				spdlog::error("--camera-fov must be between 0 and pi radians");
+				return EXIT_FAILURE;
+			}
 		} else {
 			spdlog::error("Unknown or incomplete option: {}", argv[i]);
 			return EXIT_FAILURE;
 		}
 	}
-	GLFWwindow *window = myvk::GLFWCreateWindow("VkNRC", kWidth, kHeight, true);
-
 	// Scene scene = Scene::LoadOBJShapeInstanceSAH(argv[0], 7); // at most 128 instances
 	Scene scene = Scene::LoadOBJSingleInstance(scene_path);
 	if (scene.Empty())
 		return EXIT_FAILURE;
 	spdlog::info("Loaded {} Vertices, {} Texcoords, {} Materials, {} Instances", scene.GetVertices().size(),
 	             scene.GetTexcoords().size(), scene.GetMaterials().size(), scene.GetInstances().size());
+	if (command_line_validate_scene_only) {
+		spdlog::info("Scene validation completed without creating a Vulkan device");
+		return EXIT_SUCCESS;
+	}
+
+	GLFWwindow *window = myvk::GLFWCreateWindow("VkNRC", kWidth, kHeight, true);
 
 	auto instance = myvk::Instance::CreateWithGlfwExtensions();
 	myvk::Ptr<myvk::Queue> generic_queue, compute_queue;
@@ -119,6 +151,16 @@ int main(int argc, char **argv) {
 	myvk::ImGuiInit(window, myvk::CommandPool::Create(generic_queue));
 
 	auto camera = myvk::MakePtr<Camera>();
+	if (command_line_camera_position)
+		camera->position = *command_line_camera_position;
+	if (command_line_camera_yaw)
+		camera->yaw = *command_line_camera_yaw;
+	if (command_line_camera_pitch)
+		camera->pitch = *command_line_camera_pitch;
+	if (command_line_camera_fov)
+		camera->fov = *command_line_camera_fov;
+	spdlog::info("Camera: position=({}, {}, {}), yaw={}, pitch={}, fov={}", camera->position.x, camera->position.y,
+	             camera->position.z, camera->yaw, camera->pitch, camera->fov);
 	Camera::Control cam_control{.sensitivity = 0.005f, .speed = 0.5f, .prev_cursor_pos = {}};
 
 	auto vk_scene = myvk::MakePtr<VkScene>(generic_queue, scene);
