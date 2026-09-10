@@ -4,20 +4,52 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+
 #include "rg/NRCRenderGraph.hpp"
 
 constexpr uint32_t kFrameCount = 3, kWidth = 1280, kHeight = 720;
 
 int main(int argc, char **argv) {
-	--argc, ++argv;
-	if (argc == 0) {
+	if (argc < 2) {
 		spdlog::error("No OBJ file");
 		return EXIT_FAILURE;
+	}
+	const char *scene_path = argv[1];
+	bool command_line_whiteout_diagnostic = false, command_line_whiteout_guard = false;
+	float command_line_whiteout_threshold = 100.0f;
+	uint64_t command_line_frame_limit = 0;
+	for (int i = 2; i < argc; ++i) {
+		if (std::strcmp(argv[i], "--whiteout-diagnostic") == 0) {
+			command_line_whiteout_diagnostic = true;
+		} else if (std::strcmp(argv[i], "--whiteout-guard") == 0) {
+			command_line_whiteout_guard = true;
+		} else if (std::strcmp(argv[i], "--whiteout-threshold") == 0 && i + 1 < argc) {
+			char *end = nullptr;
+			command_line_whiteout_threshold = std::strtof(argv[++i], &end);
+			if (end == argv[i] || *end != '\0' || !std::isfinite(command_line_whiteout_threshold) ||
+			    command_line_whiteout_threshold <= 0.0f) {
+				spdlog::error("Invalid --whiteout-threshold value: {}", argv[i]);
+				return EXIT_FAILURE;
+			}
+		} else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+			char *end = nullptr;
+			command_line_frame_limit = std::strtoull(argv[++i], &end, 10);
+			if (end == argv[i] || *end != '\0' || command_line_frame_limit == 0) {
+				spdlog::error("Invalid --frames value: {}", argv[i]);
+				return EXIT_FAILURE;
+			}
+		} else {
+			spdlog::error("Unknown or incomplete option: {}", argv[i]);
+			return EXIT_FAILURE;
+		}
 	}
 	GLFWwindow *window = myvk::GLFWCreateWindow("VkNRC", kWidth, kHeight, true);
 
 	// Scene scene = Scene::LoadOBJShapeInstanceSAH(argv[0], 7); // at most 128 instances
-	Scene scene = Scene::LoadOBJSingleInstance(argv[0]);
+	Scene scene = Scene::LoadOBJSingleInstance(scene_path);
 	if (scene.Empty())
 		return EXIT_FAILURE;
 	spdlog::info("Loaded {} Vertices, {} Texcoords, {} Materials, {} Instances", scene.GetVertices().size(),
@@ -80,6 +112,11 @@ int main(int argc, char **argv) {
 	auto vk_scene_blas = myvk::MakePtr<VkSceneBLAS>(vk_scene);
 	auto vk_scene_tlas = myvk::MakePtr<VkSceneTLAS>(vk_scene_blas);
 	auto vk_nrc_state = myvk::MakePtr<VkNRCState>(generic_queue, VkExtent2D{kWidth, kHeight});
+	vk_nrc_state->SetWhiteoutDiagnostic(command_line_whiteout_diagnostic);
+	vk_nrc_state->SetWhiteoutGuard(command_line_whiteout_guard);
+	vk_nrc_state->SetWhiteoutLuminanceThreshold(command_line_whiteout_threshold);
+	spdlog::info("Whiteout diagnostic: {}, guard: {}, luminance threshold: {}",
+	             command_line_whiteout_diagnostic, command_line_whiteout_guard, command_line_whiteout_threshold);
 
 	auto frame_manager = myvk::FrameManager::Create(generic_queue, present_queue, false, kFrameCount);
 	frame_manager->SetResizeFunc([&](VkExtent2D extent) {
@@ -98,6 +135,7 @@ int main(int argc, char **argv) {
 	bool nrc_whiteout_guard = vk_nrc_state->IsWhiteoutGuard();
 	float nrc_whiteout_luminance_threshold = vk_nrc_state->GetWhiteoutLuminanceThreshold();
 
+	uint64_t rendered_frame_count = 0;
 	double prev_time = glfwGetTime();
 	while (!glfwWindowShouldClose(window)) {
 		double delta;
@@ -183,6 +221,11 @@ int main(int argc, char **argv) {
 			command_buffer->End();
 
 			frame_manager->Render();
+			++rendered_frame_count;
+			if (command_line_frame_limit != 0 && rendered_frame_count >= command_line_frame_limit) {
+				spdlog::info("Completed requested {} rendered frames", rendered_frame_count);
+				glfwSetWindowShouldClose(window, GLFW_TRUE);
+			}
 		}
 
 		vk_nrc_state->NextFrame();

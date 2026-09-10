@@ -22,6 +22,20 @@ All controls are disabled by default except for the threshold value. Changing
 a control clears display accumulation so that an old accumulated frame does not
 mask the new condition.
 
+The same settings can be selected from the command line. `--frames` closes the
+application cleanly after a fixed number of rendered frames, which is useful for
+repeatable unattended runs:
+
+```powershell
+.\build-vs\Release\VkNRC.exe scene.obj `
+  --whiteout-diagnostic `
+  --whiteout-threshold 100 `
+  --frames 3600
+```
+
+Add `--whiteout-guard` only for an A/B guard run. The command-line settings are
+also reflected in the UI and may be changed while the application is running.
+
 ## Experiment protocol
 
 1. Start from freshly initialized weights using **Re-Train**.

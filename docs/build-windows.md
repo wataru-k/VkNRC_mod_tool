@@ -27,5 +27,9 @@ VkNRC requires an OBJ scene path at runtime:
 .\build-vs\Release\VkNRC.exe <path-to-scene.obj>
 ```
 
+For a fixed-duration diagnostic run, see
+[Whiteout diagnostics](whiteout-diagnostics.md), including the `--frames` and
+`--whiteout-diagnostic` options.
+
 The GPU and driver must support `VK_NV_cooperative_matrix` and the Vulkan
 extensions enabled in `src/main.cpp`.
