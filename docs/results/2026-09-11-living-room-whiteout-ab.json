@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-11T04:49:07.7568347+09:00",
+  "baseCommit": "bdfa0bc713ce4974440edd870d6c6144890a0ceb",
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "driver": "616.56",
+  "scene": "build-vs/scenes/living-room/living-room.obj",
+  "sceneSha256": "890A0680A697A79AAE9B783A0DDB1827251D62F9A9D94F37893C75625EF117CB",
+  "sceneManifestSha256": "76FE0EC721E301B0329103569DC6BA39A22B23FC3279035E53D2E4A6F6E4FB6D",
+  "frames": 3600,
+  "threshold": 100.0,
+  "seed": 1,
+  "results": [
+    {
+      "guard": false,
+      "evaluated": 3178413015,
+      "nonfinite": 0,
+      "overThreshold": 0,
+      "maxLuminance": 40.781906,
+      "exitCode": 0
+    },
+    {
+      "guard": true,
+      "evaluated": 3178419487,
+      "nonfinite": 0,
+      "overThreshold": 0,
+      "maxLuminance": 41.110214,
+      "exitCode": 0
+    }
+  ]
+}
+
