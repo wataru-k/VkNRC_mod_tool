@@ -46,6 +46,7 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
 	auto nn_inference_pass = CreatePass<NNDispatch<NNInference>>(
 	    {"nn_inference_pass"}, path_tracer_pass->GetEvalCountOutput(),
 	    NNInference::Args{.scene_ptr = m_scene_ptr,
+	                      .nrc_state_ptr = m_nrc_state_ptr,
 	                      .scene_resources = scene_resources,
 	                      .bias_factor_r = path_tracer_pass->GetBiasFactorROutput(),
 	                      .factor_gb = path_tracer_pass->GetFactorGBOutput(),

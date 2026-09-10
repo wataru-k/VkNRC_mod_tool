@@ -34,6 +34,8 @@ private:
 	bool m_accumulate{false};
 	uint32_t m_accumulate_count{0};
 	bool m_use_ema_weights{false};
+	bool m_whiteout_diagnostic{false}, m_whiteout_guard{false};
+	float m_whiteout_luminance_threshold{100.0f};
 	float m_train_probability{kDefaultTrainProbability};
 
 	void initialize_weights(std::span<float, kNNWeighCount> weights);
@@ -56,6 +58,9 @@ public:
 	inline bool IsAccumulate() const { return m_accumulate; }
 	inline uint32_t GetAccumulateCount() const { return m_accumulate_count; }
 	inline bool IsUseEMAWeights() const { return m_use_ema_weights; }
+	inline bool IsWhiteoutDiagnostic() const { return m_whiteout_diagnostic; }
+	inline bool IsWhiteoutGuard() const { return m_whiteout_guard; }
+	inline float GetWhiteoutLuminanceThreshold() const { return m_whiteout_luminance_threshold; }
 	inline float GetTrainProbability() const { return m_train_probability; }
 
 	inline void SetLeftMethod(Method method) { m_left_method = method; }
@@ -67,6 +72,9 @@ public:
 	}
 	inline void ResetAccumulateCount() { m_accumulate_count = 0; }
 	inline void SetUseEMAWeights(bool use_ema_weights) { m_use_ema_weights = use_ema_weights; }
+	inline void SetWhiteoutDiagnostic(bool enabled) { m_whiteout_diagnostic = enabled; }
+	inline void SetWhiteoutGuard(bool enabled) { m_whiteout_guard = enabled; }
+	inline void SetWhiteoutLuminanceThreshold(float threshold) { m_whiteout_luminance_threshold = threshold; }
 	inline void SetTrainProbability(float train_probability) { m_train_probability = train_probability; }
 
 	inline uint32_t GetSeed() const { return m_seed; }

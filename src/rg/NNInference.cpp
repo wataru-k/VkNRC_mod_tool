@@ -8,8 +8,16 @@
 
 namespace rg {
 
+namespace nn_inference {
+struct PushConstant_Data {
+	uint32_t whiteout_diagnostic, whiteout_guard;
+	float whiteout_luminance_threshold;
+};
+} // namespace nn_inference
+using nn_inference::PushConstant_Data;
+
 NNInference::NNInference(myvk_rg::Parent parent, const myvk_rg::Buffer &cmd, const NNInference::Args &args)
-    : myvk_rg::ComputePassBase(parent), m_scene_ptr(args.scene_ptr) {
+	: myvk_rg::ComputePassBase(parent), m_scene_ptr(args.scene_ptr), m_nrc_state_ptr(args.nrc_state_ptr) {
 	AddInput<myvk_rg::Usage::kDrawIndirectBuffer>({"cmd"}, cmd);
 	// Scene
 	AddDescriptorInput<myvk_rg::Usage::kStorageBufferR, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
@@ -50,7 +58,8 @@ NNInference::NNInference(myvk_rg::Parent parent, const myvk_rg::Buffer &cmd, con
 
 myvk::Ptr<myvk::ComputePipeline> NNInference::CreatePipeline() const {
 	auto &device = GetRenderGraphPtr()->GetDevicePtr();
-	auto pipeline_layout = myvk::PipelineLayout::Create(device, {GetVkDescriptorSetLayout()}, {});
+	auto pipeline_layout = myvk::PipelineLayout::Create(
+	    device, {GetVkDescriptorSetLayout()}, {{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstant_Data)}});
 	auto [shader_module, required_subgroup_info] = NNInferenceShader::Create(device);
 	shader_module->AddSpecialization(0, (uint32_t)m_scene_ptr->GetTextures().size());
 	VkPipelineShaderStageCreateInfo shader_stage =
@@ -67,6 +76,13 @@ myvk::Ptr<myvk::ComputePipeline> NNInference::CreatePipeline() const {
 void NNInference::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const {
 	command_buffer->CmdBindPipeline(GetVkPipeline());
 	command_buffer->CmdBindDescriptorSets({GetVkDescriptorSet()}, GetVkPipeline());
+	PushConstant_Data pc_data{
+	    .whiteout_diagnostic = m_nrc_state_ptr->IsWhiteoutDiagnostic(),
+	    .whiteout_guard = m_nrc_state_ptr->IsWhiteoutGuard(),
+	    .whiteout_luminance_threshold = m_nrc_state_ptr->GetWhiteoutLuminanceThreshold(),
+	};
+	command_buffer->CmdPushConstants(GetVkPipeline()->GetPipelineLayoutPtr(), VK_SHADER_STAGE_COMPUTE_BIT, 0,
+	                                 sizeof(pc_data), &pc_data);
 	command_buffer->CmdDispatchIndirect(GetInputBuffer({"cmd"})->GetBufferView().buffer);
 }
 

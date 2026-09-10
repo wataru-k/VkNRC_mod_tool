@@ -94,6 +94,9 @@ int main(int argc, char **argv) {
 	int view_left_method = static_cast<int>(vk_nrc_state->GetLeftMethod());
 	int view_right_method = static_cast<int>(vk_nrc_state->GetRightMethod());
 	bool nrc_use_ema = vk_nrc_state->IsUseEMAWeights(), nrc_lock = false, nrc_train_one_frame = false;
+	bool nrc_whiteout_diagnostic = vk_nrc_state->IsWhiteoutDiagnostic();
+	bool nrc_whiteout_guard = vk_nrc_state->IsWhiteoutGuard();
+	float nrc_whiteout_luminance_threshold = vk_nrc_state->GetWhiteoutLuminanceThreshold();
 
 	double prev_time = glfwGetTime();
 	while (!glfwWindowShouldClose(window)) {
@@ -144,6 +147,19 @@ int main(int argc, char **argv) {
 			if (ImGui::Button("Re-Train")) {
 				vk_nrc_state->ResetAccumulateCount();
 				vk_nrc_state->ResetMLPBuffers();
+			}
+			if (ImGui::Checkbox("Whiteout Diagnostic", &nrc_whiteout_diagnostic)) {
+				vk_nrc_state->SetWhiteoutDiagnostic(nrc_whiteout_diagnostic);
+				vk_nrc_state->ResetAccumulateCount();
+			}
+			if (ImGui::Checkbox("Experimental Whiteout Guard", &nrc_whiteout_guard)) {
+				vk_nrc_state->SetWhiteoutGuard(nrc_whiteout_guard);
+				vk_nrc_state->ResetAccumulateCount();
+			}
+			if (ImGui::SliderFloat("Whiteout Luminance", &nrc_whiteout_luminance_threshold, 1.0f, 1000.0f,
+			                       "%.1f", ImGuiSliderFlags_Logarithmic)) {
+				vk_nrc_state->SetWhiteoutLuminanceThreshold(nrc_whiteout_luminance_threshold);
+				vk_nrc_state->ResetAccumulateCount();
 			}
 		}
 		ImGui::End();

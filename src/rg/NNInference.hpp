@@ -17,6 +17,7 @@ class NNInference final : public myvk_rg::ComputePassBase {
 public:
 	struct Args {
 		const myvk::Ptr<VkScene> &scene_ptr;
+		const myvk::Ptr<VkNRCState> &nrc_state_ptr;
 		const SceneResources &scene_resources;
 		const myvk_rg::Image &bias_factor_r, &factor_gb;
 		const myvk_rg::Buffer &weights, &eval_count, &eval_records;
@@ -25,6 +26,7 @@ public:
 
 private:
 	myvk::Ptr<VkScene> m_scene_ptr;
+	myvk::Ptr<VkNRCState> m_nrc_state_ptr;
 
 public:
 	NNInference(myvk_rg::Parent parent, const myvk_rg::Buffer &cmd, const Args &args);
