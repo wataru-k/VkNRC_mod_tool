@@ -2,9 +2,9 @@
 
 ## Status
 
-Preparation is complete through the last CPU-only step. The next action is the
-GPU-backed VkNRC execution described below; it has not been started as part of
-this preparation pass.
+Preparation was completed through the last CPU-only step. The planned GPU run
+has since completed; see
+[`2026-09-11-bistro-whiteout-ab.md`](2026-09-11-bistro-whiteout-ab.md).
 
 ## Source asset
 
@@ -33,7 +33,7 @@ diffuse, specular, emission and roughness factors, but omits DDS textures. This
 is appropriate for training-stability/whiteout diagnosis, not image-quality
 comparison with the RTXGI Bistro rendering.
 
-## Next GPU command
+## GPU command used
 
 Use seed 1 for an identical-sequence guard-off/guard-on comparison:
 
@@ -45,4 +45,3 @@ Use seed 1 for an identical-sequence guard-off/guard-on comparison:
 
 The wrapper runs guard-off first, then guard-on, and writes both raw logs plus a
 parsed `summary.json` under `build-vs/whiteout-results`.
-

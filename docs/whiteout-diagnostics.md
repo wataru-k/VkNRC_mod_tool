@@ -42,8 +42,10 @@ prediction luminance. These counters are collected on the GPU and make a fixed
 frame run machine-verifiable without relying only on a screenshot.
 
 Use the same `--seed` value for guard-off and guard-on runs. It fixes both MLP
-weight initialization and the per-frame random seed sequence, making the A/B
-runs directly comparable. If omitted, VkNRC selects and logs a random seed.
+weight initialization and the generated per-frame random seed sequence. GPU
+atomic scheduling and floating-point order can still vary, so this controls the
+stochastic inputs but does not guarantee bitwise-identical runs. If omitted,
+VkNRC selects and logs a random seed.
 
 The two-run wrapper records both logs and a parsed `summary.json`:
 
@@ -86,3 +88,4 @@ does not establish general stability.
 
 - [RTX 4090 closed-room smoke A/B, 2026-09-11](results/2026-09-11-whiteout-smoke.md)
 - [Bistro GPU-run preparation, 2026-09-11](results/2026-09-11-bistro-preparation.md)
+- [RTX 4090 Bistro fixed-seed A/B, 2026-09-11](results/2026-09-11-bistro-whiteout-ab.md)
