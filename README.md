@@ -1,5 +1,11 @@
 # Vulkan Neural Radiance Caching
 
+This fork is the development home for VkNRC modifications and compatibility
+work used alongside `RTXGI_mod_tool`.
+
+Implementation survey documents are available in [docs/survey](docs/survey/README.md).
+See [docs/build-windows.md](docs/build-windows.md) for the verified Windows build procedure.
+
 [![Windows MinGW](https://github.com/AdamYuan/VkNRC/actions/workflows/windows-mingw.yml/badge.svg)](https://github.com/AdamYuan/VkNRC/actions/workflows/windows-mingw.yml)
 [![Windows MSVC](https://github.com/AdamYuan/VkNRC/actions/workflows/windows-msvc.yml/badge.svg)](https://github.com/AdamYuan/VkNRC/actions/workflows/windows-msvc.yml)
 

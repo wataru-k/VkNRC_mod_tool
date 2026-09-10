@@ -1,0 +1,4 @@
+/build*/
+/shader/include/
+.vs/
+*.user

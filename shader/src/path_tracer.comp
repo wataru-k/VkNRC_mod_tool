@@ -241,7 +241,8 @@ PathTraceResult PathTrace(Hit hit, Ray ray, in const uint method) {
 
 	if (subgroupAll(method != METHOD_NONE)) {
 		// Push a EvalRecord
-		uint eval_id = atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsRelaxed);
+		uint eval_id =
+		    atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 		NRCEvalRecord eval_record;
 		eval_record.dst = EncodeNRCEvalDstScreen(gl_GlobalInvocationID.xy);
 		eval_record.packed_input = MakeNRCInput(hit, ray.d);
@@ -300,7 +301,8 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 		}
 	}
 	if (subgroupAll(method == METHOD_CACHE)) {
-		uint eval_id = atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsRelaxed);
+		uint eval_id =
+		    atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 		NRCEvalRecord eval_record;
 		eval_record.dst = EncodeNRCEvalDstScreen(gl_GlobalInvocationID.xy);
 		eval_record.packed_input = inputs[0];
@@ -309,7 +311,7 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 		result = PathTraceResult(radiance, accumulate);
 		if (!light_terminate) {
 			uint eval_id =
-			    atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsRelaxed);
+			    atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 			NRCEvalRecord eval_record;
 			eval_record.dst = EncodeNRCEvalDstScreen(gl_GlobalInvocationID.xy);
 			eval_record.packed_input = inputs[bounce - 1];
@@ -342,7 +344,7 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 
 	uint batch = clamp(uint(RNGNext() * NRC_TRAIN_BATCH_COUNT), 0u, NRC_TRAIN_BATCH_COUNT - 1);
 	uint train_id = atomicAdd(uBatchTrainCounts[batch].count, bounce, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer,
-	                          gl_SemanticsRelaxed);
+	                          gl_SemanticsAcquireRelease);
 	if (train_id < NRC_TRAIN_BATCH_SIZE) {
 		for (uint i = bounce - 2u; i != -1u; --i) {
 			lights[i] += colors[i] * lights[i + 1];
@@ -363,7 +365,7 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 
 		if (!light_terminate) {
 			uint eval_id =
-			    atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsRelaxed);
+			    atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 			NRCEvalRecord eval_record;
 			eval_record.dst = EncodeNRCEvalDstTrain(batch, train_id, train_id + train_count - 1);
 			eval_record.packed_input = inputs[bounce - 1];
