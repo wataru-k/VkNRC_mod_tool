@@ -50,3 +50,22 @@ still uses its own Cook-Torrance implementation, hard-coded environment light
 and filmic tone mapper, so this is an asset/camera port rather than a claim of
 pixel-identical RTXGI rendering.
 
+## Bistro DDS preparation
+
+Bistro uses DDS textures. Download and verify the pinned Microsoft DirectXTex
+converter, then pass it to the scene converter:
+
+```powershell
+$texconv = (.\tools\prepare-directxtex.ps1).path
+node .\tools\convert-rtxgi-scene-to-vknrc.mjs `
+  E:\RTXGI_mod_tool_4\Assets\Media\Bistro.scene.json `
+  .\build-vs\scenes\bistro-full\bistro.obj `
+  --texconv $texconv
+```
+
+The pinned `may2026` `texconv.exe` SHA-256 is
+`DCFDEC10244E02CF5037FBA089C55FB7E1326B1C8181742D77D15FA5CB5EEF06`.
+Only textures consumed by VkNRC (diffuse, specular and emission) are converted;
+normal maps are omitted because the current VkNRC material/shader path has no
+normal-map input.
+
