@@ -134,6 +134,34 @@ function transformPoint(m, p) {
   ];
 }
 
+function transformNormal(m, n) {
+  const a00 = m[0], a01 = m[4], a02 = m[8];
+  const a10 = m[1], a11 = m[5], a12 = m[9];
+  const a20 = m[2], a21 = m[6], a22 = m[10];
+	const determinant = a00 * (a11 * a22 - a12 * a21) + a01 * (a12 * a20 - a10 * a22)
+	  + a02 * (a10 * a21 - a11 * a20);
+	if (Math.abs(determinant) < 1e-20) fail("normal transform is singular");
+  const x = (a11 * a22 - a12 * a21) * n[0] + (a12 * a20 - a10 * a22) * n[1]
+    + (a10 * a21 - a11 * a20) * n[2];
+  const y = (a02 * a21 - a01 * a22) * n[0] + (a00 * a22 - a02 * a20) * n[1]
+    + (a01 * a20 - a00 * a21) * n[2];
+  const z = (a01 * a12 - a02 * a11) * n[0] + (a02 * a10 - a00 * a12) * n[1]
+    + (a00 * a11 - a01 * a10) * n[2];
+  const length = Math.hypot(x, y, z);
+  if (!(length > 1e-20)) fail("normal transform is singular");
+	const sign = determinant < 0 ? -1 : 1;
+  return [sign * x / length, sign * y / length, sign * z / length];
+}
+
+function transformDirection(m, d) {
+  const x = m[0] * d[0] + m[4] * d[1] + m[8] * d[2];
+  const y = m[1] * d[0] + m[5] * d[1] + m[9] * d[2];
+  const z = m[2] * d[0] + m[6] * d[1] + m[10] * d[2];
+  const length = Math.hypot(x, y, z);
+  if (!(length > 1e-20)) return [0, 0, 0];
+  return [x / length, y / length, z / length];
+}
+
 function textureSource(ctx, textureInfo) {
   if (!textureInfo) return null;
   const texture = ctx.gltf.textures?.[textureInfo.index];
@@ -177,6 +205,8 @@ function copyTexture(source, modelIndex) {
 
 const materialBases = [];
 let materialCount = 0;
+let normalMappedMaterialCount = 0;
+const normalTexturePaths = new Set();
 let mtl = "# Materials generated from an RTXGI scene manifest for VkNRC.\n";
 for (let modelIndex = 0; modelIndex < models.length; ++modelIndex) {
   const ctx = models[modelIndex];
@@ -193,11 +223,17 @@ for (let modelIndex = 0; modelIndex < models.length; ++modelIndex) {
     const diffuseMap = copyTexture(textureSource(ctx, specGloss?.diffuseTexture ?? pbr?.baseColorTexture), modelIndex);
     const specularMap = copyTexture(textureSource(ctx, specGloss?.specularGlossinessTexture), modelIndex);
     const emissionMap = copyTexture(textureSource(ctx, material.emissiveTexture), modelIndex);
+	const normalMap = copyTexture(textureSource(ctx, material.normalTexture), modelIndex);
+	if (normalMap) {
+	  ++normalMappedMaterialCount;
+	  normalTexturePaths.add(normalMap);
+	}
     mtl += `newmtl material_${materialCount}\nKd ${diffuse.join(" ")}\nKs ${specular.join(" ")}\n`;
     mtl += `Ke ${emission.join(" ")}\nNi 1.5\nPr ${roughness}\n`;
     if (diffuseMap) mtl += `map_Kd ${diffuseMap}\n`;
     if (specularMap) mtl += `map_Ks ${specularMap}\n`;
     if (emissionMap) mtl += `map_Ke ${emissionMap}\n`;
+	if (normalMap) mtl += `norm ${normalMap}\n`;
     mtl += "\n";
     ++materialCount;
   }
@@ -205,24 +241,28 @@ for (let modelIndex = 0; modelIndex < models.length; ++modelIndex) {
 fs.writeFileSync(mtlPath, mtl);
 
 const fd = fs.openSync(outputPath, "w");
-let chunk = `mtllib ${path.basename(mtlPath)}\nvt 0 0\n`;
+let chunk = `# vknrc_tangents_in_vertex_colors 1\nmtllib ${path.basename(mtlPath)}\nvt 0 0\n`;
 function emit(text) {
   chunk += text;
   if (chunk.length >= 4 * 1024 * 1024) { fs.writeSync(fd, chunk); chunk = ""; }
 }
 
-let vertexBase = 1, texcoordBase = 2;
-let vertexCount = 0, triangleCount = 0, primitiveCount = 0;
+let vertexBase = 1, texcoordBase = 2, normalBase = 1;
+let vertexCount = 0, normalCount = 0, tangentCount = 0, tangentFallbackCount = 0, triangleCount = 0, primitiveCount = 0;
 const aabbMin = [Infinity, Infinity, Infinity], aabbMax = [-Infinity, -Infinity, -Infinity];
 
 function emitPrimitive(ctx, modelIndex, primitive, world, label) {
   if ((primitive.mode ?? 4) !== 4) fail(`${label}: only triangle primitives are supported`);
   if (primitive.indices === undefined) fail(`${label}: non-indexed primitives are not supported`);
   const positions = accessorReader(ctx, primitive.attributes.POSITION);
+	const normals = primitive.attributes.NORMAL === undefined ? null : accessorReader(ctx, primitive.attributes.NORMAL);
+	const tangents = primitive.attributes.TANGENT === undefined ? null : accessorReader(ctx, primitive.attributes.TANGENT);
   const texcoords = primitive.attributes.TEXCOORD_0 === undefined ? null
     : accessorReader(ctx, primitive.attributes.TEXCOORD_0);
   const indices = accessorReader(ctx, primitive.indices);
   if (texcoords && texcoords.count !== positions.count) fail(`${label}: POSITION/TEXCOORD_0 count mismatch`);
+	if (normals && normals.count !== positions.count) fail(`${label}: POSITION/NORMAL count mismatch`);
+	if (tangents && tangents.count !== positions.count) fail(`${label}: POSITION/TANGENT count mismatch`);
   emit(`o ${label}\nusemtl material_${materialBases[modelIndex] + (primitive.material ?? 0)}\n`);
   for (let i = 0; i < positions.count; ++i) {
     const p = transformPoint(world, positions.get(i));
@@ -230,7 +270,17 @@ function emitPrimitive(ctx, modelIndex, primitive, world, label) {
       aabbMin[axis] = Math.min(aabbMin[axis], p[axis]);
       aabbMax[axis] = Math.max(aabbMax[axis], p[axis]);
     }
-    emit(`v ${p[0]} ${p[1]} ${p[2]}\n`);
+		if (tangents) {
+			const sourceTangent = tangents.get(i);
+			const tangent = transformDirection(world, sourceTangent);
+			if (tangent[0] === 0 && tangent[1] === 0 && tangent[2] === 0) ++tangentFallbackCount;
+			// tinyobjloader supports RGB vertex colors. Encode tangent handedness in
+			// the vector length: 1 for +1 and 2 for -1.
+			const encodedLength = sourceTangent[3] < 0 ? 2 : 1;
+			emit(`v ${p[0]} ${p[1]} ${p[2]} ${tangent[0] * encodedLength} ${tangent[1] * encodedLength} ${tangent[2] * encodedLength}\n`);
+		} else {
+			emit(`v ${p[0]} ${p[1]} ${p[2]}\n`);
+		}
   }
   if (texcoords)
     for (let i = 0; i < texcoords.count; ++i) {
@@ -239,17 +289,27 @@ function emitPrimitive(ctx, modelIndex, primitive, world, label) {
 	  // the value sampled by VkNRC matches the source glTF convention.
       emit(`vt ${uv[0]} ${-uv[1]}\n`);
     }
+	if (normals)
+		for (let i = 0; i < normals.count; ++i) {
+			const n = transformNormal(world, normals.get(i));
+			emit(`vn ${n[0]} ${n[1]} ${n[2]}\n`);
+		}
   for (let i = 0; i < indices.count; i += 3) {
     const face = [];
     for (let c = 0; c < 3; ++c) {
       const index = indices.get(i + c)[0];
-      face.push(`${vertexBase + index}/${texcoords ? texcoordBase + index : 1}`);
+		const vertex = vertexBase + index;
+		const texcoord = texcoords ? texcoordBase + index : 1;
+		face.push(normals ? `${vertex}/${texcoord}/${normalBase + index}` : `${vertex}/${texcoord}`);
     }
     emit(`f ${face.join(" ")}\n`);
   }
   vertexBase += positions.count;
   if (texcoords) texcoordBase += texcoords.count;
+	if (normals) normalBase += normals.count;
   vertexCount += positions.count;
+	normalCount += normals?.count ?? 0;
+	tangentCount += tangents?.count ?? 0;
   triangleCount += indices.count / 3;
   ++primitiveCount;
 }
@@ -288,10 +348,15 @@ const manifest = {
   outputObj: outputPath,
   outputMtl: mtlPath,
   vertices: vertexCount,
+	normals: normalCount,
+	tangents: tangentCount,
+	tangentFallbacks: tangentFallbackCount,
   triangles: triangleCount,
   primitives: primitiveCount,
   materials: materialCount,
   textures: copiedTextures.size,
+	normalMappedMaterials: normalMappedMaterialCount,
+	normalTextures: normalTexturePaths.size,
   sourceAabb: { min: aabbMin, max: aabbMax, center, extent },
   normalizationScale,
   camera: cameraEntry ? {

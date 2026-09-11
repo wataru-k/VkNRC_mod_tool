@@ -94,7 +94,9 @@ int main(int argc, char **argv) {
 	Scene scene = Scene::LoadOBJSingleInstance(scene_path);
 	if (scene.Empty())
 		return EXIT_FAILURE;
-	spdlog::info("Loaded {} Vertices, {} Texcoords, {} Materials, {} Instances", scene.GetVertices().size(),
+	spdlog::info("Loaded {} Vertices, {} Normals, {} Tangents, {} Texcoords, {} Materials, {} Instances",
+	             scene.GetVertices().size(), scene.GetNormals().size() - 1,
+	             std::ranges::count_if(scene.GetTangents(), [](const glm::vec4 &tangent) { return tangent.w != 0.0f; }),
 	             scene.GetTexcoords().size(), scene.GetMaterials().size(), scene.GetInstances().size());
 	if (command_line_validate_scene_only) {
 		spdlog::info("Scene validation completed without creating a Vulkan device");

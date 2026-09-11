@@ -135,6 +135,10 @@ SceneResources NRCRenderGraph::create_scene_resources() {
 	    .vertices = CreateResource<myvk_rg::InputBuffer>({"vertices"}, m_scene_ptr->GetVertexBuffer())->Alias(),
 	    .vertex_indices =
 	        CreateResource<myvk_rg::InputBuffer>({"vertex_indices"}, m_scene_ptr->GetVertexIndexBuffer())->Alias(),
+	    .normals = CreateResource<myvk_rg::InputBuffer>({"normals"}, m_scene_ptr->GetNormalBuffer())->Alias(),
+	    .normal_indices =
+	        CreateResource<myvk_rg::InputBuffer>({"normal_indices"}, m_scene_ptr->GetNormalIndexBuffer())->Alias(),
+	    .tangents = CreateResource<myvk_rg::InputBuffer>({"tangents"}, m_scene_ptr->GetTangentBuffer())->Alias(),
 	    .texcoords = CreateResource<myvk_rg::InputBuffer>({"texcoords"}, m_scene_ptr->GetTexcoordBuffer())->Alias(),
 	    .texcoord_indices =
 	        CreateResource<myvk_rg::InputBuffer>({"texcoord_indices"}, m_scene_ptr->GetTexcoordIndexBuffer())->Alias(),

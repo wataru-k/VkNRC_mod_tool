@@ -27,6 +27,7 @@ public:
 		alignas(sizeof(glm::vec4)) glm::vec3 emission;
 		uint32_t emission_texture_id;
 		float metallic, roughness, ior;
+		uint32_t normal_texture_id;
 	};
 	struct Transform {
 		glm::mat3 rotate;
@@ -40,6 +41,8 @@ private:
 	std::vector<Instance> m_instances;
 	myvk::Ptr<myvk::Queue> m_queue_ptr;
 	myvk::Ptr<myvk::Buffer> m_vertex_buffer, m_vertex_index_buffer;
+	myvk::Ptr<myvk::Buffer> m_normal_buffer, m_normal_index_buffer;
+	myvk::Ptr<myvk::Buffer> m_tangent_buffer;
 	myvk::Ptr<myvk::Buffer> m_texcoord_buffer, m_texcoord_index_buffer;
 	myvk::Ptr<myvk::Buffer> m_material_buffer, m_material_id_buffer;
 	std::vector<myvk::Ptr<myvk::ImageView>> m_textures;
@@ -48,6 +51,7 @@ private:
 	struct TexLoad {
 		std::filesystem::path Scene::Material::*p_path;
 		uint32_t Material::*p_id;
+		VkFormat format;
 	};
 	template <TexLoad... Loads> void load_textures(const Scene &scene, auto &&get_material);
 
@@ -75,6 +79,9 @@ public:
 
 	inline const auto &GetVertexBuffer() const { return m_vertex_buffer; }
 	inline const auto &GetVertexIndexBuffer() const { return m_vertex_index_buffer; }
+	inline const auto &GetNormalBuffer() const { return m_normal_buffer; }
+	inline const auto &GetNormalIndexBuffer() const { return m_normal_index_buffer; }
+	inline const auto &GetTangentBuffer() const { return m_tangent_buffer; }
 	inline const auto &GetTexcoordBuffer() const { return m_texcoord_buffer; }
 	inline const auto &GetTexcoordIndexBuffer() const { return m_texcoord_index_buffer; }
 	inline const auto &GetMaterialBuffer() const { return m_material_buffer; }

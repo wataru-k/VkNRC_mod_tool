@@ -86,6 +86,17 @@ node .\tools\convert-rtxgi-scene-to-vknrc.mjs `
 The pinned `may2026` `texconv.exe` SHA-256 is
 `DCFDEC10244E02CF5037FBA089C55FB7E1326B1C8181742D77D15FA5CB5EEF06`.
 Only textures consumed by VkNRC (diffuse, specular and emission) are converted;
-normal maps are omitted because the current VkNRC material/shader path has no
-normal-map input.
+the normal-map port additionally converts referenced normal textures and emits
+them with the MTL `norm` directive. Normal maps are uploaded as linear UNORM
+images while color maps remain sRGB.
+
+The converter also writes glTF vertex normals and preserves tangent direction
+and handedness in marked OBJ vertex-color fields. The marker prevents ordinary
+OBJ vertex colors from being interpreted as tangents. At a hit, VkNRC
+interpolates the source normal/tangent basis and applies the tangent-space normal
+map; zero or missing tangents fall back to a basis reconstructed from triangle
+positions and UVs.
+
+See the [Bistro normal-map CPU preparation result](results/2026-09-11-bistro-normal-map-preparation.md)
+for coverage, asset hashes and the pending GPU validation boundary.
 
