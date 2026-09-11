@@ -7,6 +7,7 @@ param(
     [ValidateRange(0.000001, 1000000000.0)]
     [double]$Threshold = 100.0,
     [uint32]$Seed = 1,
+    [switch]$RTXGIReferenceLighting,
     [string]$OutputDirectory
 )
 
@@ -49,6 +50,7 @@ function Invoke-WhiteoutRun {
         '--frames', $Frames
     )
     if ($Guard) { $arguments += '--whiteout-guard' }
+    if ($RTXGIReferenceLighting) { $arguments += '--rtxgi-reference-lighting' }
     $arguments += $cameraArguments
 
     $process = Start-Process -FilePath $exe -ArgumentList $arguments `
@@ -85,6 +87,7 @@ $summary = [pscustomobject]@{
     scene = $scenePath
     executable = $exe
     sceneManifest = if (Test-Path -LiteralPath $manifestPath) { $manifestPath } else { $null }
+    rtxgiReferenceLighting = [bool]$RTXGIReferenceLighting
     generatedAt = (Get-Date).ToString('o')
     results = $results
 }

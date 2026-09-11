@@ -42,13 +42,33 @@ to both A/B runs.
 Generated OBJ, MTL, copied textures and manifests remain under ignored
 `build-vs`. The original assets remain owned by the adjacent RTXGI repository.
 
+## RTXGI reference lighting
+
+The optional `--rtxgi-reference-lighting` preset narrows the largest lighting
+difference with the RTXGI Pathtracer defaults. It changes miss radiance from
+VkNRC's uniform `(10, 10, 10)` to the Pathtracer sky `(4, 6, 8)` and adds its
+shadowed Sun: irradiance 20, direction-to-light `(0.049, 0.87, -0.48)` and a
+soft-shadow angular diameter of 0.8 degrees.
+
+```powershell
+.\tools\run-whiteout-ab.ps1 `
+  -Scene .\build-vs\scenes\bistro-full\bistro.obj `
+  -RTXGIReferenceLighting `
+  -Frames 3600 -Threshold 100 -Seed 1
+```
+
+The preset is opt-in so existing VkNRC results retain their original lighting.
+It affects both resolved radiance and the direct-light terms stored in NRC
+training records.
+
 ## Fidelity boundary
 
 The port preserves scene composition, mesh transforms, triangle topology,
-base-color textures, constant material factors, camera position and FOV. VkNRC
-still uses its own Cook-Torrance implementation, hard-coded environment light
-and filmic tone mapper, so this is an asset/camera port rather than a claim of
-pixel-identical RTXGI rendering.
+base-color textures, constant material factors, camera position and FOV. The
+reference-lighting preset reproduces the RTXGI default sky and Sun parameters,
+but VkNRC still uses its own Cook-Torrance implementation, path policy and
+filmic tone mapper. This remains a controlled reproduction port rather than a
+claim of pixel-identical rendering.
 
 ## Bistro DDS preparation
 

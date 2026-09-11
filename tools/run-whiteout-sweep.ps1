@@ -7,6 +7,7 @@ param(
     [uint64]$Frames = 3600,
     [ValidateRange(0.000001, 1000000000.0)]
     [double]$Threshold = 100.0,
+    [switch]$RTXGIReferenceLighting,
     [string]$OutputDirectory
 )
 
@@ -37,6 +38,7 @@ function Write-Summary {
         frames = $Frames
         threshold = $Threshold
         guard = $false
+        rtxgiReferenceLighting = [bool]$RTXGIReferenceLighting
         completed = ($null -eq $stopReason -and $results.Count -eq ($scenePaths.Count * $Seeds.Count))
         stopReason = $stopReason
         results = $results
@@ -71,6 +73,7 @@ function Write-Summary {
             '--seed', $seed,
             '--frames', $Frames
         ) + $cameraArguments
+        if ($RTXGIReferenceLighting) { $arguments += '--rtxgi-reference-lighting' }
         $startedAt = Get-Date
         $process = Start-Process -FilePath $exe -ArgumentList $arguments `
             -WorkingDirectory $repoRoot -RedirectStandardOutput $stdout `

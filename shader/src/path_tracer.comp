@@ -32,6 +32,7 @@ layout(push_constant) uniform uuPushConstant {
 	uvec2 uExtent;
 	uint uLeftMethod, uRightMethod;
 	float uTrainProbability;
+	uint uRTXGIReferenceLighting;
 };
 
 // V-Buffer
@@ -140,8 +141,37 @@ CookTorranceBRDFArgs GetHitBRDFArgs(in const Hit hit) {
 }
 
 const vec3 kConstLight = vec3(10, 10, 10);
+const vec3 kRTXGISkyRadiance = vec3(4, 6, 8);
+const vec3 kRTXGISunDirectionToLight = vec3(0.049, 0.87, -0.48);
+const float kRTXGISunIrradiance = 20.0;
+const float kRTXGISunAngularSize = radians(0.8);
+
+vec3 GetSkyRadiance() { return uRTXGIReferenceLighting != 0 ? kRTXGISkyRadiance : kConstLight; }
 
 vec3 NormalizeRGB(in const vec3 rgb) { return !any(isnan(rgb)) && !any(isinf(rgb)) ? max(rgb, vec3(0)) : vec3(0); }
+
+vec3 EvaluateDirectSun(in const Hit hit, in const vec3 view_dir) {
+	if (uRTXGIReferenceLighting == 0)
+		return vec3(0);
+	vec3 sun_dir = normalize(kRTXGISunDirectionToLight);
+	vec3 tangent = normalize(cross(sun_dir, abs(sun_dir.z) < 0.999 ? vec3(0, 0, 1) : vec3(0, 1, 0)));
+	vec3 bitangent = cross(tangent, sun_dir);
+	float angle = RNGNext() * 2.0 * M_PI;
+	float disk_radius = sqrt(RNGNext()) * tan(kRTXGISunAngularSize * 0.5);
+	vec3 light_dir = normalize(sun_dir + disk_radius * (cos(angle) * tangent + sin(angle) * bitangent));
+	float cosine = dot(hit.normal, light_dir);
+	if (cosine <= 0)
+		return vec3(0);
+	rayQueryEXT shadow_query;
+	rayQueryInitializeEXT(shadow_query, uTLAS, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT, 0xFF,
+	                     hit.position, T_MIN, light_dir, T_MAX);
+	while (rayQueryProceedEXT(shadow_query))
+		;
+	if (rayQueryGetIntersectionTypeEXT(shadow_query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
+		return vec3(0);
+	return NormalizeRGB(CookTorranceBRDF(GetHitBRDFArgs(hit), light_dir, view_dir, hit.normal) * cosine *
+	                    kRTXGISunIrradiance);
+}
 
 struct BRDFStepInfo {
 	vec3 color;
@@ -209,7 +239,7 @@ PathTraceResult PathTrace(Hit hit, Ray ray, in const uint method) {
 	vec3 radiance = vec3(0), accumulate = vec3(1);
 
 	BRDFStepInfo info = BRDFStep(hit, ray);
-	radiance += accumulate * hit.emission;
+	radiance += accumulate * (hit.emission + EvaluateDirectSun(hit, -ray.d));
 	accumulate *= info.color;
 	ray = info.ray;
 
@@ -228,12 +258,12 @@ PathTraceResult PathTrace(Hit hit, Ray ray, in const uint method) {
 			if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
 				hit = GetRayQueryHit(ray_query, ray);
 				info = BRDFStep(hit, ray);
-				radiance += accumulate * hit.emission;
+				radiance += accumulate * (hit.emission + EvaluateDirectSun(hit, -ray.d));
 				accumulate *= info.color;
 				ray = info.ray;
 				sqrt_a_sum += sqrt(info.dist2 / (info.pdf * info.cosine));
 			} else {
-				radiance += accumulate * kConstLight;
+				radiance += accumulate * GetSkyRadiance();
 				return PathTraceResult(radiance, accumulate);
 			}
 		}
@@ -266,7 +296,7 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 	bool light_terminate = false;
 
 	BRDFStepInfo info = BRDFStep(hit, ray);
-	radiance += accumulate * hit.emission;
+	radiance += accumulate * (hit.emission + EvaluateDirectSun(hit, -ray.d));
 	accumulate *= info.color;
 	ray = info.ray;
 
@@ -286,16 +316,17 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 		if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
 			hit = GetRayQueryHit(ray_query, ray);
 			info = BRDFStep(hit, ray);
-			radiance += accumulate * hit.emission;
+			vec3 direct_light = hit.emission + EvaluateDirectSun(hit, -ray.d);
+			radiance += accumulate * direct_light;
 			accumulate *= info.color;
 			ray = info.ray;
 			sqrt_a_sum += sqrt(info.dist2 / (info.pdf * info.cosine));
-			lights[bounce - 1] = hit.emission;
+			lights[bounce - 1] = direct_light;
 			colors[bounce - 1] = info.color;
 			inputs[bounce] = MakeNRCInput(hit, ray.d);
 		} else {
-			radiance += accumulate * kConstLight;
-			lights[bounce - 1] = kConstLight;
+			radiance += accumulate * GetSkyRadiance();
+			lights[bounce - 1] = GetSkyRadiance();
 			light_terminate = true;
 			break;
 		}
@@ -330,13 +361,14 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 		if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
 			hit = GetRayQueryHit(ray_query, ray);
 			info = BRDFStep(hit, ray);
+			vec3 direct_light = hit.emission + EvaluateDirectSun(hit, -ray.d);
 			ray = info.ray;
 			sqrt_a_sum += sqrt(info.dist2 / (info.pdf * info.cosine));
-			lights[bounce - 1] = hit.emission;
+			lights[bounce - 1] = direct_light;
 			colors[bounce - 1] = info.color;
 			inputs[bounce] = MakeNRCInput(hit, ray.d);
 		} else {
-			lights[bounce - 1] = kConstLight;
+			lights[bounce - 1] = GetSkyRadiance();
 			light_terminate = true;
 			break;
 		}
@@ -400,7 +432,7 @@ void main() {
 
 	PathTraceResult result;
 	if (primitive_id == -1u)
-		result = PathTraceResult(kConstLight, vec3(0));
+		result = PathTraceResult(GetSkyRadiance(), vec3(0));
 	else {
 		Ray ray;
 		{
