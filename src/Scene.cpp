@@ -5,6 +5,8 @@
 #include "Scene.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <fstream>
 #include <span>
 
 #include "AABB.hpp"
@@ -13,6 +15,13 @@
 
 bool Scene::obj_load(const std::filesystem::path &filename, auto &&make_instance) {
 	tinyobj::ObjReaderConfig reader_config;
+	bool tangents_in_vertex_colors = false;
+	{
+		std::ifstream input(filename);
+		std::string first_line;
+		tangents_in_vertex_colors = std::getline(input, first_line) && first_line == "# vknrc_tangents_in_vertex_colors 1";
+	}
+	reader_config.vertex_color = tangents_in_vertex_colors;
 	tinyobj::ObjReader reader;
 
 	if (!reader.ParseFromFile(filename.string(), reader_config)) {
@@ -40,11 +49,33 @@ bool Scene::obj_load(const std::filesystem::path &filename, auto &&make_instance
 			vertex = (vertex - obj_center) * inv_max_extent;
 	}
 
+	m_tangents.resize(m_vertices.size(), glm::vec4{0.0f});
+	if (tangents_in_vertex_colors) {
+		if (attrib.colors.size() != m_vertices.size() * 3) {
+			spdlog::error("Tangent carrier count does not match vertex count");
+			return false;
+		}
+		for (size_t i = 0; i < m_vertices.size(); ++i) {
+			glm::vec3 encoded{attrib.colors[i * 3], attrib.colors[i * 3 + 1], attrib.colors[i * 3 + 2]};
+			float encoded_length = std::sqrt(glm::dot(encoded, encoded));
+			if (encoded_length > 1e-20f)
+				m_tangents[i] = glm::vec4{encoded / encoded_length, encoded_length > 1.5f ? -1.0f : 1.0f};
+		}
+	}
+
 	// Read Texcoords
 	m_texcoords.resize(attrib.texcoords.size() / 2);
 	std::ranges::copy(attrib.texcoords, (float *)m_texcoords.data());
 	for (auto &texcoord : m_texcoords)
 		texcoord.y = -texcoord.y; // Flip Y-Coord
+
+	// Index zero is a sentinel for vertices without a source normal.
+	m_normals.emplace_back(0.0f);
+	for (size_t i = 0; i + 2 < attrib.normals.size(); i += 3) {
+		glm::vec3 normal{attrib.normals[i], attrib.normals[i + 1], attrib.normals[i + 2]};
+		float length_squared = glm::dot(normal, normal);
+		m_normals.push_back(length_squared > 1e-20f ? normal / std::sqrt(length_squared) : glm::vec3{0.0f});
+	}
 
 	// Read Materials
 	m_materials.reserve(materials.size());
@@ -59,6 +90,8 @@ bool Scene::obj_load(const std::filesystem::path &filename, auto &&make_instance
 		    .emission = {material.emission[0], material.emission[1], material.emission[2]},
 		    .emission_texture = material.emissive_texname.empty() ? std::filesystem::path{}
 		                                                          : filename.parent_path() / material.emissive_texname,
+		    .normal_texture = material.normal_texname.empty() ? std::filesystem::path{}
+		                                                      : filename.parent_path() / material.normal_texname,
 		    .metallic = material.metallic,
 		    .roughness = material.roughness,
 		    .ior = material.ior,
@@ -91,6 +124,7 @@ void Scene::obj_single_instance(auto &&shapes) {
 	for (const tinyobj::shape_t &shape : shapes) {
 		for (tinyobj::index_t index : shape.mesh.indices) {
 			m_vertex_indices.push_back(index.vertex_index);
+			m_normal_indices.push_back(index.normal_index < 0 ? 0u : uint32_t(index.normal_index + 1));
 			m_texcoord_indices.push_back(index.texcoord_index);
 		}
 		for (uint32_t material_id : shape.mesh.material_ids)
@@ -104,6 +138,7 @@ void Scene::obj_shape_instance(auto &&shapes) {
 		    {.first_index = (uint32_t)m_vertex_indices.size(), .index_count = (uint32_t)shape.mesh.indices.size()});
 		for (tinyobj::index_t index : shape.mesh.indices) {
 			m_vertex_indices.push_back(index.vertex_index);
+			m_normal_indices.push_back(index.normal_index < 0 ? 0u : uint32_t(index.normal_index + 1));
 			m_texcoord_indices.push_back(index.texcoord_index);
 		}
 		for (uint32_t material_id : shape.mesh.material_ids)
@@ -118,7 +153,7 @@ struct SAHSplit {
 };
 struct Reference {
 	AABB aabb;
-	std::vector<uint32_t> vertex_indices, texcoord_indices, material_ids;
+	std::vector<uint32_t> vertex_indices, normal_indices, texcoord_indices, material_ids;
 
 	inline uint32_t GetTriangleCount() const { return material_ids.size(); }
 	template <int Axis> static AABB _AxisSplitSAH(std::span<Reference> refs, SAHSplit *p_split) {
@@ -182,6 +217,7 @@ void Scene::obj_sah_shape_instance(auto &&shapes, uint32_t max_level) {
 		for (tinyobj::index_t index : shape.mesh.indices) {
 			ref.vertex_indices.push_back(index.vertex_index);
 			ref.aabb.Expand(GetVertices()[index.vertex_index]);
+			ref.normal_indices.push_back(index.normal_index < 0 ? 0u : uint32_t(index.normal_index + 1));
 			ref.texcoord_indices.push_back(index.texcoord_index);
 		}
 		for (uint32_t material_id : shape.mesh.material_ids)
@@ -197,6 +233,11 @@ void Scene::obj_sah_shape_instance(auto &&shapes, uint32_t max_level) {
 			    ref.vertex_indices[i * 3 + 0],
 			    ref.vertex_indices[i * 3 + 1],
 			    ref.vertex_indices[i * 3 + 2],
+			};
+			tri_ref.normal_indices = {
+			    ref.normal_indices[i * 3 + 0],
+			    ref.normal_indices[i * 3 + 1],
+			    ref.normal_indices[i * 3 + 2],
 			};
 			auto &vertices = m_vertices;
 			tri_ref.aabb = {vertices[tri_ref.vertex_indices[0]], vertices[tri_ref.vertex_indices[1]]};
@@ -215,6 +256,7 @@ void Scene::obj_sah_shape_instance(auto &&shapes, uint32_t max_level) {
 		for (const Reference &ref : refs) {
 			index_count += ref.vertex_indices.size();
 			m_vertex_indices.insert(m_vertex_indices.end(), ref.vertex_indices.begin(), ref.vertex_indices.end());
+			m_normal_indices.insert(m_normal_indices.end(), ref.normal_indices.begin(), ref.normal_indices.end());
 			m_texcoord_indices.insert(m_texcoord_indices.end(), ref.texcoord_indices.begin(),
 			                          ref.texcoord_indices.end());
 			m_material_ids.insert(m_material_ids.end(), ref.material_ids.begin(), ref.material_ids.end());

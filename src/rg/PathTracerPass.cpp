@@ -43,6 +43,12 @@ PathTracerPass::PathTracerPass(myvk_rg::Parent parent, const PathTracerPass::Arg
 	    {6}, {"material_ids"}, args.scene_resources.material_ids);
 	AddDescriptorInput<myvk_rg::Usage::kStorageBufferR, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
 	    {7}, {"transforms"}, args.scene_resources.transforms);
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferR, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {10}, {"normals"}, args.scene_resources.normals);
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferR, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {11}, {"normal_indices"}, args.scene_resources.normal_indices);
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferR, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {18}, {"tangents"}, args.scene_resources.tangents);
 	for (uint32_t texture_id = 0; const auto &texture : args.scene_resources.textures) {
 		AddDescriptorInput<myvk_rg::Usage::kSampledImage, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
 		    {8, texture_id}, {"textures", texture_id}, texture, args.scene_resources.texture_sampler);

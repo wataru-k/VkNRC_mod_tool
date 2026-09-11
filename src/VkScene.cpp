@@ -5,6 +5,7 @@
 #include "VkScene.hpp"
 
 #include <future>
+#include <map>
 #include <thread>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -79,6 +80,12 @@ void VkScene::upload_buffers(const Scene &scene, std::span<const Material> mater
 	    myvk::Buffer::CreateStaging(device, scene.GetTexcoords().begin(), scene.GetTexcoords().end());
 	auto vertex_index_staging_buffer =
 	    myvk::Buffer::CreateStaging(device, scene.GetVertexIndices().begin(), scene.GetVertexIndices().end());
+	auto normal_staging_buffer =
+	    myvk::Buffer::CreateStaging(device, scene.GetNormals().begin(), scene.GetNormals().end());
+	auto normal_index_staging_buffer =
+	    myvk::Buffer::CreateStaging(device, scene.GetNormalIndices().begin(), scene.GetNormalIndices().end());
+	auto tangent_staging_buffer =
+	    myvk::Buffer::CreateStaging(device, scene.GetTangents().begin(), scene.GetTangents().end());
 	auto texcoord_index_staging_buffer =
 	    myvk::Buffer::CreateStaging(device, scene.GetTexcoordIndices().begin(), scene.GetTexcoordIndices().end());
 	auto material_id_staging_buffer =
@@ -99,6 +106,9 @@ void VkScene::upload_buffers(const Scene &scene, std::span<const Material> mater
 	cmd_create_copy(vertex_staging_buffer, &m_vertex_buffer, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | kASInputUsages);
 	cmd_create_copy(vertex_index_staging_buffer, &m_vertex_index_buffer,
 	                VK_BUFFER_USAGE_INDEX_BUFFER_BIT | kASInputUsages);
+	cmd_create_copy(normal_staging_buffer, &m_normal_buffer, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+	cmd_create_copy(normal_index_staging_buffer, &m_normal_index_buffer, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	cmd_create_copy(tangent_staging_buffer, &m_tangent_buffer, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 	cmd_create_copy(texcoord_staging_buffer, &m_texcoord_buffer, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 	cmd_create_copy(texcoord_index_staging_buffer, &m_texcoord_index_buffer, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	cmd_create_copy(material_id_staging_buffer, &m_material_id_buffer, 0);
@@ -124,10 +134,16 @@ std::vector<VkScene::Material> VkScene::make_materials(const Scene &scene) {
 		    .metallic = material.metallic,
 		    .roughness = material.roughness,
 		    .ior = material.ior,
+		    .normal_texture_id = -1u,
 		});
-	load_textures<TexLoad{&Scene::Material::diffuse_texture, &Material::diffuse_texture_id},
-	              TexLoad{&Scene::Material::specular_texture, &Material::specular_texture_id},
-	              TexLoad{&Scene::Material::emission_texture, &Material::emission_texture_id}>(
+	load_textures<TexLoad{&Scene::Material::diffuse_texture, &Material::diffuse_texture_id,
+	                      VK_FORMAT_R8G8B8A8_SRGB},
+	              TexLoad{&Scene::Material::specular_texture, &Material::specular_texture_id,
+	                      VK_FORMAT_R8G8B8A8_SRGB},
+	              TexLoad{&Scene::Material::emission_texture, &Material::emission_texture_id,
+	                      VK_FORMAT_R8G8B8A8_SRGB},
+	              TexLoad{&Scene::Material::normal_texture, &Material::normal_texture_id,
+	                      VK_FORMAT_R8G8B8A8_UNORM}>(
 	    scene, [&](uint32_t material_id) -> Material & { return materials[material_id]; });
 	return materials;
 }
@@ -135,22 +151,25 @@ std::vector<VkScene::Material> VkScene::make_materials(const Scene &scene) {
 template <VkScene::TexLoad... Loads> void VkScene::load_textures(const Scene &scene, auto &&get_material) {
 	const auto &device = GetDevicePtr();
 
-	std::unordered_map<std::filesystem::path, uint32_t> path_id_map;
+	std::map<std::pair<std::filesystem::path, VkFormat>, uint32_t> path_id_map;
 	std::vector<std::filesystem::path> paths;
+	std::vector<VkFormat> formats;
 
 	for (uint32_t mat_id = 0; mat_id < scene.GetMaterials().size(); ++mat_id)
 		(
 		    [&]() {
 			    const auto &path = scene.GetMaterials()[mat_id].*Loads.p_path;
 			    auto &dst_mat = get_material(mat_id);
-			    auto it = path_id_map.find(path);
+			    const auto key = std::pair{path, Loads.format};
+			    auto it = path_id_map.find(key);
 			    if (it != path_id_map.end()) {
 				    dst_mat.*Loads.p_id = it->second;
 				    return;
 			    }
 			    uint32_t path_id = paths.size();
-			    path_id_map[path] = path_id;
+			    path_id_map[key] = path_id;
 			    paths.push_back(path);
+			    formats.push_back(Loads.format);
 			    dst_mat.*Loads.p_id = path_id;
 		    }(),
 		    ...);
@@ -190,7 +209,7 @@ template <VkScene::TexLoad... Loads> void VkScene::load_textures(const Scene &sc
 
 			// Create Image and ImageView
 			VkExtent2D extent = {(uint32_t)width, (uint32_t)height};
-			auto image = myvk::Image::CreateTexture2D(device, extent, 1, VK_FORMAT_R8G8B8A8_SRGB,
+			auto image = myvk::Image::CreateTexture2D(device, extent, 1, formats[path_id],
 			                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			m_textures[texture_id] = myvk::ImageView::Create(image, VK_IMAGE_VIEW_TYPE_2D);
 

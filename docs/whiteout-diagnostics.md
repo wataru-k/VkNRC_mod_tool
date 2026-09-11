@@ -110,3 +110,5 @@ does not establish general stability.
 - [RTX 4090 textured Bistro fixed-seed A/B, 2026-09-11](results/2026-09-11-bistro-textured-whiteout-ab.md)
 - [RTX 4090 LivingRoom and textured Bistro multiseed sweep, 2026-09-11](results/2026-09-11-living-room-bistro-multiseed.md)
 - [RTX 4090 textured Bistro RTXGI-reference-lighting A/B, 2026-09-11](results/2026-09-11-bistro-rtxgi-lighting-whiteout-ab.md)
+- [Bistro normal-map port CPU preparation, 2026-09-11](results/2026-09-11-bistro-normal-map-preparation.md)
+- [RTX 4090 Bistro normal-map WhiteOut reproduction, 2026-09-11](results/2026-09-11-bistro-normal-map-whiteout-ab.md)

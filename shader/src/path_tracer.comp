@@ -20,6 +20,8 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #define SCENE_TEXTURE_BINDING 8
 #define SCENE_TEXTURE_NUM_CONST_ID 0
 #define SCENE_BUFFERS_FIRST_BINDING 1
+#define SCENE_NORMALS_BINDING 10
+#define SCENE_TANGENTS_BINDING 18
 #include "Scene.glsl"
 
 #define METHOD_NONE 0
@@ -66,6 +68,53 @@ struct Hit {
 	bool flip_normal;
 };
 
+vec3 GetShadingNormal(in const uint instance_id, in const uint primitive_id, in const vec3 barycentric,
+	                  in const vec3 face_normal, in const vec2 texcoord, in const Material material) {
+	vec3 n = mat3(GetSceneNormal(instance_id, primitive_id, 0), GetSceneNormal(instance_id, primitive_id, 1),
+	              GetSceneNormal(instance_id, primitive_id, 2)) * barycentric;
+	if (dot(n, n) < 1e-12)
+		n = face_normal;
+	else {
+		n = normalize(n);
+		if (dot(n, face_normal) < 0)
+			n = -n;
+	}
+	if (material.normal_texture_id == -1u)
+		return n;
+
+	vec3 p0 = GetSceneVertex(instance_id, primitive_id, 0);
+	vec3 dp1 = GetSceneVertex(instance_id, primitive_id, 1) - p0;
+	vec3 dp2 = GetSceneVertex(instance_id, primitive_id, 2) - p0;
+	vec2 uv0 = GetSceneTexcoord(primitive_id, 0);
+	vec2 duv1 = GetSceneTexcoord(primitive_id, 1) - uv0;
+	vec2 duv2 = GetSceneTexcoord(primitive_id, 2) - uv0;
+	float determinant = duv1.x * duv2.y - duv1.y * duv2.x;
+	if (abs(determinant) < 1e-10)
+		return n;
+	vec3 bitangent_raw = (dp2 * duv1.x - dp1 * duv2.x) / determinant;
+	vec4 source_tangent = mat3x4(GetSceneTangent(instance_id, primitive_id, 0),
+	                            GetSceneTangent(instance_id, primitive_id, 1),
+	                            GetSceneTangent(instance_id, primitive_id, 2)) * barycentric;
+	vec3 tangent_raw;
+	float handedness;
+	if (dot(source_tangent.xyz, source_tangent.xyz) >= 1e-12) {
+		tangent_raw = source_tangent.xyz;
+		handedness = source_tangent.w < 0 ? -1.0 : 1.0;
+	} else {
+		tangent_raw = (dp1 * duv2.y - dp2 * duv1.y) / determinant;
+		handedness = 0.0;
+	}
+	vec3 tangent = tangent_raw - n * dot(n, tangent_raw);
+	if (dot(tangent, tangent) < 1e-12)
+		return n;
+	tangent = normalize(tangent);
+	if (handedness == 0.0)
+		handedness = dot(cross(n, tangent), bitangent_raw) < 0 ? -1.0 : 1.0;
+	vec3 bitangent = cross(n, tangent) * handedness;
+	vec3 mapped = GetSceneNormalSample(material, texcoord);
+	return dot(mapped, mapped) < 1e-12 ? n : normalize(tangent * mapped.x + bitangent * mapped.y + n * mapped.z);
+}
+
 Hit GetVBufferHit(in const uint primitive_id, in const uint instance_id, in const Ray ray) {
 	vec2 texcoord_0 = GetSceneTexcoord(primitive_id, 0);
 	vec2 texcoord_1 = GetSceneTexcoord(primitive_id, 1);
@@ -85,13 +134,14 @@ Hit GetVBufferHit(in const uint primitive_id, in const uint instance_id, in cons
 
 	Hit hit;
 	hit.flip_normal = dot(n, ray.d) >= 0;
-	hit.normal = hit.flip_normal ? -n : n;
 	hit.primitive_id = primitive_id;
 	hit.instance_id = instance_id;
 	hit.barycentric = barycentric.yz;
 	hit.position = mat3(vertex_0, vertex_1, vertex_2) * barycentric;
 	hit.texcoord = mat3x2(texcoord_0, texcoord_1, texcoord_2) * barycentric;
 	hit.material = GetSceneMaterial(primitive_id);
+	vec3 shading_normal = GetShadingNormal(instance_id, primitive_id, barycentric, n, hit.texcoord, hit.material);
+	hit.normal = hit.flip_normal ? -shading_normal : shading_normal;
 	hit.diffuse = GetSceneDiffuse(hit.material, hit.texcoord);
 	hit.emission = GetSceneEmission(hit.material, hit.texcoord);
 	hit.specular = GetSceneSpecular(hit.material, hit.texcoord);
@@ -118,13 +168,14 @@ Hit GetRayQueryHit(in const rayQueryEXT ray_query, in const Ray ray) {
 
 	Hit hit;
 	hit.flip_normal = dot(n, ray.d) >= 0;
-	hit.normal = hit.flip_normal ? -n : n;
 	hit.primitive_id = primitive_id;
 	hit.instance_id = instance_id;
 	hit.barycentric = barycentric.yz;
 	hit.position = mat3(vertex_0, vertex_1, vertex_2) * barycentric;
 	hit.texcoord = mat3x2(texcoord_0, texcoord_1, texcoord_2) * barycentric;
 	hit.material = GetSceneMaterial(primitive_id);
+	vec3 shading_normal = GetShadingNormal(instance_id, primitive_id, barycentric, n, hit.texcoord, hit.material);
+	hit.normal = hit.flip_normal ? -shading_normal : shading_normal;
 	hit.diffuse = GetSceneDiffuse(hit.material, hit.texcoord);
 	hit.specular = GetSceneSpecular(hit.material, hit.texcoord);
 	hit.emission = GetSceneEmission(hit.material, hit.texcoord);

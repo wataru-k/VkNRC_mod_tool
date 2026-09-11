@@ -11,7 +11,8 @@
 namespace rg {
 
 struct SceneResources {
-	myvk_rg::Buffer tlas, vertices, vertex_indices, texcoords, texcoord_indices, materials, material_ids, transforms;
+	myvk_rg::Buffer tlas, vertices, vertex_indices, normals, normal_indices, tangents, texcoords, texcoord_indices, materials,
+	    material_ids, transforms;
 	std::vector<myvk_rg::Image> textures;
 	myvk::Ptr<myvk::Sampler> texture_sampler;
 };

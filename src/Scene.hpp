@@ -19,6 +19,7 @@ public:
 		std::filesystem::path specular_texture;
 		glm::vec3 emission;
 		std::filesystem::path emission_texture;
+		std::filesystem::path normal_texture;
 		float metallic, roughness, ior;
 	};
 	struct Instance {
@@ -30,11 +31,13 @@ private:
 	static_assert(sizeof(glm::vec3) == 3 * sizeof(float));
 
 	std::vector<glm::vec3> m_vertices;
+	std::vector<glm::vec3> m_normals;
+	std::vector<glm::vec4> m_tangents;
 	std::vector<glm::vec2> m_texcoords;
 	std::vector<Material> m_materials;
 
 	std::vector<Instance> m_instances;
-	std::vector<uint32_t> m_vertex_indices, m_texcoord_indices; // Indices on each triangle vertex
+	std::vector<uint32_t> m_vertex_indices, m_normal_indices, m_texcoord_indices; // Per triangle vertex
 	std::vector<uint32_t> m_material_ids; // Material IDs on each triangle
 
 	bool obj_load(const std::filesystem::path &filename, auto &&make_instance);
@@ -51,8 +54,11 @@ public:
 	inline explicit operator bool() const { return !Empty(); }
 
 	inline const auto &GetVertices() const { return m_vertices; }
+	inline const auto &GetNormals() const { return m_normals; }
+	inline const auto &GetTangents() const { return m_tangents; }
 	inline const auto &GetTexcoords() const { return m_texcoords; }
 	inline const auto &GetVertexIndices() const { return m_vertex_indices; }
+	inline const auto &GetNormalIndices() const { return m_normal_indices; }
 	inline const auto &GetTexcoordIndices() const { return m_texcoord_indices; }
 
 	inline const auto &GetMaterials() const { return m_materials; }
