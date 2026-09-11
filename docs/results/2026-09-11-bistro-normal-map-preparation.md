@@ -40,9 +40,9 @@ the tangent against the shading normal, restores handedness, and transforms the
 sampled tangent-space normal. Missing or zero tangents reconstruct the basis
 from triangle positions and UVs.
 
-## Next validation
+## GPU validation
 
 The Release shader/C++ build passes and both generated and legacy scenes pass
-CPU-only parsing. The next step requires a GPU: run a short textured Bistro
-smoke with RTXGI reference lighting, then a fixed-seed 3,600-frame guard-off/on
-whiteout A/B if the smoke succeeds.
+CPU-only parsing. GPU validation subsequently reproduced WhiteOut within the
+60-frame smoke and confirmed non-finite network output in the 3,600-frame A/B.
+See the [Bistro normal-map WhiteOut reproduction](2026-09-11-bistro-normal-map-whiteout-ab.md).
