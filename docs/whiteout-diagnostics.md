@@ -36,6 +36,9 @@ repeatable unattended runs:
 
 Add `--whiteout-guard` only for an A/B guard run. The command-line settings are
 also reflected in the UI and may be changed while the application is running.
+Add `--rtxgi-reference-lighting` (or `-RTXGIReferenceLighting` on either wrapper)
+to evaluate the port with the RTXGI Pathtracer's default sky and shadowed Sun
+instead of VkNRC's original constant environment.
 On clean shutdown, VkNRC logs the total evaluated predictions, non-finite
 predictions, predictions over the selected threshold, and the maximum finite
 prediction luminance. These counters are collected on the GPU and make a fixed
@@ -106,3 +109,4 @@ does not establish general stability.
 - [Textured Bistro port CPU preparation, 2026-09-11](results/2026-09-11-bistro-textured-preparation.md)
 - [RTX 4090 textured Bistro fixed-seed A/B, 2026-09-11](results/2026-09-11-bistro-textured-whiteout-ab.md)
 - [RTX 4090 LivingRoom and textured Bistro multiseed sweep, 2026-09-11](results/2026-09-11-living-room-bistro-multiseed.md)
+- [RTX 4090 textured Bistro RTXGI-reference-lighting A/B, 2026-09-11](results/2026-09-11-bistro-rtxgi-lighting-whiteout-ab.md)

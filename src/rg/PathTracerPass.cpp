@@ -18,6 +18,7 @@ struct PushConstant_Data {
 	alignas(sizeof(VkExtent2D)) VkExtent2D extent;
 	uint32_t left_method, right_method;
 	float train_probability;
+	uint32_t rtxgi_reference_lighting;
 };
 } // namespace path_tracer_pass
 using path_tracer_pass::PushConstant_Data;
@@ -97,6 +98,7 @@ void PathTracerPass::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_bu
 		    .left_method = static_cast<uint32_t>(m_nrc_state_ptr->GetLeftMethod()),
 		    .right_method = static_cast<uint32_t>(m_nrc_state_ptr->GetRightMethod()),
 		    .train_probability = m_nrc_state_ptr->GetTrainProbability(),
+		    .rtxgi_reference_lighting = m_nrc_state_ptr->IsRTXGIReferenceLighting(),
 		};
 	}
 	command_buffer->CmdBindPipeline(GetVkPipeline());

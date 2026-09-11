@@ -23,6 +23,7 @@ int main(int argc, char **argv) {
 	}
 	const char *scene_path = argv[1];
 	bool command_line_whiteout_diagnostic = false, command_line_whiteout_guard = false;
+	bool command_line_rtxgi_reference_lighting = false;
 	float command_line_whiteout_threshold = 100.0f;
 	uint64_t command_line_frame_limit = 0;
 	std::optional<uint32_t> command_line_seed;
@@ -45,6 +46,8 @@ int main(int argc, char **argv) {
 			command_line_validate_scene_only = true;
 		} else if (std::strcmp(argv[i], "--whiteout-guard") == 0) {
 			command_line_whiteout_guard = true;
+		} else if (std::strcmp(argv[i], "--rtxgi-reference-lighting") == 0) {
+			command_line_rtxgi_reference_lighting = true;
 		} else if (std::strcmp(argv[i], "--whiteout-threshold") == 0 && i + 1 < argc) {
 			char *end = nullptr;
 			command_line_whiteout_threshold = std::strtof(argv[++i], &end);
@@ -169,10 +172,12 @@ int main(int argc, char **argv) {
 	auto vk_nrc_state = myvk::MakePtr<VkNRCState>(generic_queue, VkExtent2D{kWidth, kHeight}, command_line_seed);
 	vk_nrc_state->SetWhiteoutDiagnostic(command_line_whiteout_diagnostic);
 	vk_nrc_state->SetWhiteoutGuard(command_line_whiteout_guard);
+	vk_nrc_state->SetRTXGIReferenceLighting(command_line_rtxgi_reference_lighting);
 	vk_nrc_state->SetWhiteoutLuminanceThreshold(command_line_whiteout_threshold);
 	spdlog::info("Whiteout diagnostic: {}, guard: {}, luminance threshold: {}",
 	             command_line_whiteout_diagnostic, command_line_whiteout_guard, command_line_whiteout_threshold);
 	spdlog::info("RNG seed: {}", vk_nrc_state->GetRNGSeed());
+	spdlog::info("RTXGI reference lighting: {}", command_line_rtxgi_reference_lighting);
 
 	auto frame_manager = myvk::FrameManager::Create(generic_queue, present_queue, false, kFrameCount);
 	frame_manager->SetResizeFunc([&](VkExtent2D extent) {
@@ -189,6 +194,7 @@ int main(int argc, char **argv) {
 	bool nrc_use_ema = vk_nrc_state->IsUseEMAWeights(), nrc_lock = false, nrc_train_one_frame = false;
 	bool nrc_whiteout_diagnostic = vk_nrc_state->IsWhiteoutDiagnostic();
 	bool nrc_whiteout_guard = vk_nrc_state->IsWhiteoutGuard();
+	bool rtxgi_reference_lighting = vk_nrc_state->IsRTXGIReferenceLighting();
 	float nrc_whiteout_luminance_threshold = vk_nrc_state->GetWhiteoutLuminanceThreshold();
 
 	uint64_t rendered_frame_count = 0;
@@ -208,6 +214,10 @@ int main(int argc, char **argv) {
 		ImGui::Begin("Panel");
 		ImGui::Text("FPS %.1f", ImGui::GetIO().Framerate);
 		if (ImGui::CollapsingHeader("View")) {
+			if (ImGui::Checkbox("RTXGI Reference Lighting", &rtxgi_reference_lighting)) {
+				vk_nrc_state->SetRTXGIReferenceLighting(rtxgi_reference_lighting);
+				vk_nrc_state->ResetAccumulateCount();
+			}
 			if (ImGui::Checkbox("Accumulate", &view_accumulate))
 				vk_nrc_state->SetAccumulate(view_accumulate);
 			if (vk_nrc_state->IsAccumulate()) {
