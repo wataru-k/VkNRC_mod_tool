@@ -1,0 +1,19 @@
+{
+  "date": "2026-09-11T13:23:51.9257437+09:00",
+  "baseCommit": "e72cffea12657de9304cdc4532aaf194e65428fd",
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "driver": "616.56",
+  "frames": 3600,
+  "threshold": 100.0,
+  "guard": false,
+  "completed": true,
+  "stopReason": null,
+  "results": [
+    { "scene": "living-room", "seed": 2, "evaluated": 3178426680, "nonfinite": 0, "overThreshold": 0, "maxLuminance": 45.745907, "exitCode": 0 },
+    { "scene": "living-room", "seed": 3, "evaluated": 3178423982, "nonfinite": 0, "overThreshold": 0, "maxLuminance": 29.730167, "exitCode": 0 },
+    { "scene": "living-room", "seed": 4, "evaluated": 3178406747, "nonfinite": 0, "overThreshold": 0, "maxLuminance": 39.488020, "exitCode": 0 },
+    { "scene": "bistro-full", "seed": 2, "evaluated": 2918919153, "nonfinite": 0, "overThreshold": 0, "maxLuminance": 32.271860, "exitCode": 0 },
+    { "scene": "bistro-full", "seed": 3, "evaluated": 2918932819, "nonfinite": 0, "overThreshold": 0, "maxLuminance": 54.040474, "exitCode": 0 },
+    { "scene": "bistro-full", "seed": 4, "evaluated": 2918952064, "nonfinite": 0, "overThreshold": 0, "maxLuminance": 28.236967, "exitCode": 0 }
+  ]
+}

@@ -55,6 +55,18 @@ The two-run wrapper records both logs and a parsed `summary.json`:
   -Frames 3600 -Threshold 100 -Seed 1
 ```
 
+For guard-off seed coverage across multiple scenes, use the sweep wrapper. It
+writes `summary.json` after every run and stops before the next run if it sees a
+non-zero exit, a Vulkan/texture error, a non-finite prediction or a prediction
+above the selected threshold:
+
+```powershell
+.\tools\run-whiteout-sweep.ps1 `
+  -Scenes @(.\build-vs\scenes\living-room\living-room.obj,
+            .\build-vs\scenes\bistro-full\bistro.obj) `
+  -Seeds 2,3,4 -Frames 3600 -Threshold 100
+```
+
 VkNRC accepts OBJ input only. For a glTF asset such as the RTXGI Bistro scene,
 prepare a geometry-only OBJ without using the GPU:
 
@@ -93,3 +105,4 @@ does not establish general stability.
 - [RTX 4090 LivingRoom fixed-seed A/B, 2026-09-11](results/2026-09-11-living-room-whiteout-ab.md)
 - [Textured Bistro port CPU preparation, 2026-09-11](results/2026-09-11-bistro-textured-preparation.md)
 - [RTX 4090 textured Bistro fixed-seed A/B, 2026-09-11](results/2026-09-11-bistro-textured-whiteout-ab.md)
+- [RTX 4090 LivingRoom and textured Bistro multiseed sweep, 2026-09-11](results/2026-09-11-living-room-bistro-multiseed.md)
