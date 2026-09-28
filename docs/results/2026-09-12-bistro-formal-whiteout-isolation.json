@@ -1,0 +1,39 @@
+{
+  "classification": "TRAINING_DEPENDENT_NRC_CONTRIBUTION_DISPLAY_WHITEOUT",
+  "scope": "formal fixed-tone-map pre-overlay DISPLAY_WHITEOUT measurement",
+  "artifactSummary": "build-vs/bootstrap-isolation/20260912-bistro-formal-60f/summary.json",
+  "artifactSummarySha256": "925BF76D1D8DAFDB9C97813A165E7A499F834CE28B0A1F72AF1905CAC5E4EA2B",
+  "metadataCorrection": {
+    "artifactWasNotModified": true,
+    "reason": "The generated artifact retained the preflight classification even though frame metrics supplied a formal display verdict. This canonical record supersedes only that metadata."
+  },
+  "fixedConditions": {
+    "scene": "Bistro normal-map conversion",
+    "seed": 1,
+    "frames": 60,
+    "resolution": [1280, 720],
+    "rtxgiReferenceLighting": true,
+    "diagnosticOverlay": false,
+    "toneMapper": "Hejl2015",
+    "whitePoint": 3.2
+  },
+  "displayWhiteoutCriterion": {
+    "minimumLuminance": 0.95,
+    "maximumChromaRange": 0.05,
+    "minimumCoverage": 0.5,
+    "minimumIncreaseOverBeforeResolve": 0.25,
+    "minimumConsecutiveFrames": 3
+  },
+  "conditions": [
+    {"id": "A", "bootstrap": true, "training": true, "displayContribution": true, "valid": true, "displayWhiteout": true, "firstFrame": 37, "maxConsecutiveFrames": 24},
+    {"id": "B", "bootstrap": false, "training": true, "displayContribution": true, "valid": true, "displayWhiteout": true, "firstFrame": 36, "maxConsecutiveFrames": 25},
+    {"id": "C", "bootstrap": false, "training": false, "displayContribution": true, "valid": true, "displayWhiteout": false, "firstFrame": null, "maxConsecutiveFrames": 0},
+    {"id": "D", "bootstrap": true, "training": true, "displayContribution": false, "valid": true, "displayWhiteout": false, "firstFrame": null, "maxConsecutiveFrames": 0}
+  ],
+  "conclusions": [
+    "Training is necessary in this matrix.",
+    "Mixing the NRC contribution into resolve is necessary for the displayed WhiteOut.",
+    "Bootstrap completion is not necessary and is not the sole cause.",
+    "The specific optimizer, scale, loss, or target-distribution root cause remains unresolved."
+  ]
+}

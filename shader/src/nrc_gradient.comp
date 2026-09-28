@@ -1,4 +1,5 @@
 #version 460
+#extension GL_KHR_memory_scope_semantics : enable
 /* #ifndef SUBGROUP_SIZE
 #define SUBGROUP_SIZE 32
 #endif */
@@ -22,6 +23,9 @@ layout(binding = 9) uniform uuBatchTrainCounts { uint uBatchTrainCount; };
 #define WEIGHTS_BINDING 10
 #define DWEIGHTS_BINDING 11
 #include "NN_nv.glsl"
+layout(std430, binding = 12) buffer uuFrameMetrics { uint uFrameMetrics[]; };
+#include "Diagnostics.glsl"
+layout(push_constant) uniform uuPushConstant { uint uFrameMetricsEnabled; };
 
 void main() {
 	uvec4 inputs[8] = uvec4[8](uvec4(0), uvec4(0), uvec4(0), uvec4(0), uvec4(0), uvec4(0), uvec4(0), uvec4(0));
@@ -43,6 +47,13 @@ void main() {
 	NNForward64_ReLU(4, act_coopmats[4], act_coopmats[5]);
 	NNForward3(5, act_coopmats[5], out_coopmats);
 	vec3 predict = NNOutput3(out_coopmats);
+	if (gl_GlobalInvocationID.x < uBatchTrainCount && uFrameMetricsEnabled != 0) {
+		float predict_luminance = dot(vec3(0.299, 0.587, 0.114), max(predict, vec3(0)));
+		float loss = dot(predict - target, predict - target) / 3.0 /
+		             (predict_luminance * predict_luminance + 0.01);
+		RecordDiagnosticStage(DIAG_TRAIN_PREDICTION_BASE, predict);
+		RecordDiagnosticStage(DIAG_LOSS_BASE, vec3(loss));
+	}
 	NNLoadDA3_RelativeL2LuminanceLoss(predict, target, LOSS_SCALE, out_coopmats);
 	NNUpdateDW3(5, out_coopmats, act_coopmats[5]);
 	NNBackwardDA3_ReLU(5, out_coopmats, act_coopmats[5]);

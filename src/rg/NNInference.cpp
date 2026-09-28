@@ -12,6 +12,8 @@ namespace nn_inference {
 struct PushConstant_Data {
 	uint32_t whiteout_diagnostic, whiteout_guard;
 	float whiteout_luminance_threshold;
+	uint32_t nrc_contribution;
+	uint32_t frame_metrics;
 };
 } // namespace nn_inference
 using nn_inference::PushConstant_Data;
@@ -56,6 +58,10 @@ NNInference::NNInference(myvk_rg::Parent parent, const myvk_rg::Buffer &cmd, con
 	}
 	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
 	    {14}, {"whiteout_counters"}, args.whiteout_counters);
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {15}, {"frame_metrics"}, args.frame_metrics);
+	AddDescriptorInput<myvk_rg::Usage::kStorageImageRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {16}, {"resolved_pre_overlay"}, args.resolved_pre_overlay);
 }
 
 myvk::Ptr<myvk::ComputePipeline> NNInference::CreatePipeline() const {
@@ -82,6 +88,8 @@ void NNInference::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffe
 	    .whiteout_diagnostic = m_nrc_state_ptr->IsWhiteoutDiagnostic(),
 	    .whiteout_guard = m_nrc_state_ptr->IsWhiteoutGuard(),
 	    .whiteout_luminance_threshold = m_nrc_state_ptr->GetWhiteoutLuminanceThreshold(),
+	    .nrc_contribution = m_nrc_state_ptr->IsNRCContributionEnabled(),
+	    .frame_metrics = m_nrc_state_ptr->IsFrameMetricsEnabled(),
 	};
 	command_buffer->CmdPushConstants(GetVkPipeline()->GetPipelineLayoutPtr(), VK_SHADER_STAGE_COMPUTE_BIT, 0,
 	                                 sizeof(pc_data), &pc_data);

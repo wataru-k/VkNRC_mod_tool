@@ -12,6 +12,7 @@ set(SHADER_HEADER
         Sample.glsl
         LambertBRDF.glsl
         CookTorranceBRDF.glsl
+        Diagnostics.glsl
         NRCRecord.glsl
         Scene.glsl
         NN_nv.glsl

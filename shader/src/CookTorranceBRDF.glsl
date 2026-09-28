@@ -16,10 +16,13 @@ float CT_Specular_Prob(in const CookTorranceBRDFArgs args) {
 	float specular_lumi = CT_Luminance(args.specular);
 	return specular_lumi / (diffuse_lumi + specular_lumi);
 }
-float Walter_G1(in const float v_dot_h, in const float v_dot_n, in const float a_b_2) {
+float Walter_G1(in const float v_dot_h, in const float v_dot_n, in const float a_b_2,
+                in const bool visibility_fix) {
 	float v_dot_n_2 = v_dot_n * v_dot_n;
 	float a2 = 1.0 / (a_b_2 * (1 - v_dot_n_2) / (v_dot_n_2)), a = sqrt(a2);
-	return max(v_dot_h / v_dot_n, 0) * (a >= 1.6 ? 1.0 : (3.535 * a + 2.181 * a2) / (1.0 + 2.276 * a + 2.577 * a2));
+	float approximation = a >= 1.6 ? 1.0 : (3.535 * a + 2.181 * a2) / (1.0 + 2.276 * a + 2.577 * a2);
+	float visibility = v_dot_h / v_dot_n;
+	return visibility_fix ? (visibility > 0.0 ? approximation : 0.0) : max(visibility, 0.0) * approximation;
 }
 float Smith_G(in const float G1_l, in const float G1_v) { return G1_l * G1_v; }
 
@@ -44,7 +47,8 @@ float Schlick_Fresnel(in const float v_dot_h, in const float ior) {
 
 // all dirs' origins are their hit points
 // L: Light (Incident), V: View (Out)
-vec3 CookTorranceBRDF(in const CookTorranceBRDFArgs args, in const vec3 l, in const vec3 v, in const vec3 n) {
+vec3 CookTorranceBRDF(in const CookTorranceBRDFArgs args, in const vec3 l, in const vec3 v, in const vec3 n,
+                      in const bool walter_g1_fix) {
 	vec3 h = normalize(l + v);
 
 	float n_dot_h = max(dot(n, h), 1e-8);
@@ -55,7 +59,8 @@ vec3 CookTorranceBRDF(in const CookTorranceBRDFArgs args, in const vec3 l, in co
 	float a = args.roughness, a2 = a * a;
 
 	// Geometric
-	float G = Smith_G(Walter_G1(v_dot_h, n_dot_v, a2), Walter_G1(l_dot_h, n_dot_l, a2));
+	float G = Smith_G(Walter_G1(v_dot_h, n_dot_v, a2, walter_g1_fix),
+	                  Walter_G1(l_dot_h, n_dot_l, a2, walter_g1_fix));
 	// Normal
 	float D = Beckmann_D(n_dot_h, a2);
 	// Fresnel

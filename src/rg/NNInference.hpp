@@ -19,8 +19,8 @@ public:
 		const myvk::Ptr<VkScene> &scene_ptr;
 		const myvk::Ptr<VkNRCState> &nrc_state_ptr;
 		const SceneResources &scene_resources;
-		const myvk_rg::Image &bias_factor_r, &factor_gb;
-		const myvk_rg::Buffer &weights, &eval_count, &eval_records, &whiteout_counters;
+		const myvk_rg::Image &bias_factor_r, &factor_gb, &resolved_pre_overlay;
+		const myvk_rg::Buffer &weights, &eval_count, &eval_records, &whiteout_counters, &frame_metrics;
 		std::span<const myvk_rg::Buffer, VkNRCState::GetTrainBatchCount()> batch_train_records;
 	};
 
@@ -34,7 +34,9 @@ public:
 	myvk::Ptr<myvk::ComputePipeline> CreatePipeline() const final;
 	void CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const final;
 	inline auto GetColorOutput() const { return MakeImageOutput({"base_extra_r"}); }
+	inline auto GetResolvedPreOverlayOutput() const { return MakeImageOutput({"resolved_pre_overlay"}); }
 	inline auto GetWhiteoutCountersOutput() const { return MakeBufferOutput({"whiteout_counters"}); }
+	inline auto GetFrameMetricsOutput() const { return MakeBufferOutput({"frame_metrics"}); }
 	inline auto GetBatchTrainRecordsOutput(uint32_t batch_index) const {
 		return MakeBufferOutput({"batch_train_records", batch_index});
 	}
