@@ -19,6 +19,9 @@ struct PushConstant_Data {
 	uint32_t left_method, right_method;
 	float train_probability;
 	uint32_t rtxgi_reference_lighting;
+	uint32_t nrc_bootstrap;
+	uint32_t frame_metrics;
+	uint32_t walter_g1_fix;
 };
 } // namespace path_tracer_pass
 using path_tracer_pass::PushConstant_Data;
@@ -75,6 +78,14 @@ PathTracerPass::PathTracerPass(myvk_rg::Parent parent, const PathTracerPass::Arg
 	    CreateResource<myvk_rg::ManagedImage>({"bias_factor_r"}, VK_FORMAT_R32G32B32A32_SFLOAT)->Alias());
 	AddDescriptorInput<myvk_rg::Usage::kStorageImageW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
 	    {17}, {"factor_gb"}, CreateResource<myvk_rg::ManagedImage>({"factor_gb"}, VK_FORMAT_R32G32_SFLOAT)->Alias());
+	AddDescriptorInput<myvk_rg::Usage::kStorageImageW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {19}, {"before_resolve"},
+	    CreateResource<myvk_rg::ManagedImage>({"before_resolve"}, VK_FORMAT_R32G32B32A32_SFLOAT)->Alias());
+	AddDescriptorInput<myvk_rg::Usage::kStorageImageW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {20}, {"resolved_pre_overlay"},
+	    CreateResource<myvk_rg::ManagedImage>({"resolved_pre_overlay"}, VK_FORMAT_R32G32B32A32_SFLOAT)->Alias());
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {21}, {"frame_metrics"}, args.frame_metrics);
 }
 
 myvk::Ptr<myvk::ComputePipeline> PathTracerPass::CreatePipeline() const {
@@ -105,6 +116,9 @@ void PathTracerPass::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_bu
 		    .right_method = static_cast<uint32_t>(m_nrc_state_ptr->GetRightMethod()),
 		    .train_probability = m_nrc_state_ptr->GetTrainProbability(),
 		    .rtxgi_reference_lighting = m_nrc_state_ptr->IsRTXGIReferenceLighting(),
+		    .nrc_bootstrap = m_nrc_state_ptr->IsNRCBootstrapEnabled(),
+		    .frame_metrics = m_nrc_state_ptr->IsFrameMetricsEnabled(),
+		    .walter_g1_fix = m_nrc_state_ptr->IsWalterG1FixEnabled(),
 		};
 	}
 	command_buffer->CmdBindPipeline(GetVkPipeline());

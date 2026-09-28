@@ -35,6 +35,9 @@ layout(push_constant) uniform uuPushConstant {
 	uint uLeftMethod, uRightMethod;
 	float uTrainProbability;
 	uint uRTXGIReferenceLighting;
+	uint uNRCBootstrap;
+	uint uFrameMetricsEnabled;
+	uint uWalterG1Fix;
 };
 
 // V-Buffer
@@ -49,6 +52,10 @@ uBatchTrainRecords[NRC_TRAIN_BATCH_COUNT];
 
 layout(binding = 16, rgba32f) writeonly uniform image2D uBias_FactorR;
 layout(binding = 17, rg32f) writeonly uniform image2D uFactorGB;
+layout(binding = 19, rgba32f) writeonly uniform image2D uBeforeResolve;
+layout(binding = 20, rgba32f) writeonly uniform image2D uResolvedPreOverlay;
+layout(std430, binding = 21) buffer uuFrameMetrics { uint uFrameMetrics[]; };
+#include "Diagnostics.glsl"
 
 struct Ray {
 	vec3 o, d;
@@ -220,7 +227,7 @@ vec3 EvaluateDirectSun(in const Hit hit, in const vec3 view_dir) {
 		;
 	if (rayQueryGetIntersectionTypeEXT(shadow_query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 		return vec3(0);
-	return NormalizeRGB(CookTorranceBRDF(GetHitBRDFArgs(hit), light_dir, view_dir, hit.normal) * cosine *
+	return NormalizeRGB(CookTorranceBRDF(GetHitBRDFArgs(hit), light_dir, view_dir, hit.normal, uWalterG1Fix != 0) * cosine *
 	                    kRTXGISunIrradiance);
 }
 
@@ -255,9 +262,29 @@ BRDFStepInfo BRDFStep(in const Hit hit, in const Ray ray) {
 		dir = sample_dir_pdf.xyz;
 		pdf = sample_dir_pdf.w;
 	}
-	vec3 brdf = CookTorranceBRDF(brdf_args, dir, -ray.d, hit.normal); // sample_dir is incidence dir
-	float cosine = abs(dot(hit.normal, dir));
-	vec3 color = NormalizeRGB(brdf * cosine / pdf);
+	vec3 brdf = CookTorranceBRDF(brdf_args, dir, -ray.d, hit.normal, uWalterG1Fix != 0); // sample_dir is incidence dir
+	float signed_cosine = dot(hit.normal, dir);
+	float cosine = abs(signed_cosine);
+	vec3 throughput = brdf * cosine / pdf;
+	if (uFrameMetricsEnabled != 0) {
+		RecordDiagnosticStage(DIAG_BRDF_BASE, brdf);
+		RecordDiagnosticStage(DIAG_BRDF_PDF_BASE, vec3(pdf));
+		RecordDiagnosticStage(DIAG_BRDF_COSINE_BASE, vec3(cosine));
+		RecordDiagnosticStage(DIAG_BRDF_THROUGHPUT_BASE, throughput);
+		RecordDiagnosticStage(DIAG_BRDF_ROUGHNESS_BASE, vec3(brdf_args.roughness));
+		atomicAdd(uFrameMetrics[DIAG_BRDF_STEP_TOTAL], 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer,
+		          gl_SemanticsAcquireRelease);
+		if (signed_cosine <= 0.0)
+			atomicAdd(uFrameMetrics[DIAG_BRDF_BELOW_HEMISPHERE], 1u, gl_ScopeQueueFamily,
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
+		if (isnan(pdf) || isinf(pdf) || pdf <= 0.0)
+			atomicAdd(uFrameMetrics[DIAG_BRDF_BAD_PDF], 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer,
+			          gl_SemanticsAcquireRelease);
+		if (any(isnan(throughput)) || any(isinf(throughput)))
+			atomicAdd(uFrameMetrics[DIAG_BRDF_NONFINITE_THROUGHPUT], 1u, gl_ScopeQueueFamily,
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
+	}
+	vec3 color = NormalizeRGB(throughput);
 	BRDFStepInfo info;
 	info.color = color;
 	info.ray = Ray(hit.position, dir);
@@ -270,7 +297,7 @@ BRDFStepInfo BRDFStep(in const Hit hit, in const Ray ray) {
 BRDFStepInfo BRDFQuery(in const Hit hit, in const Ray ray, in const vec3 dir) {
 	CookTorranceBRDFArgs brdf_args = GetHitBRDFArgs(hit);
 	float pdf = CookTorrancePDF(brdf_args, dir, -ray.d, hit.normal);
-	vec3 brdf = CookTorranceBRDF(brdf_args, dir, -ray.d, hit.normal);
+	vec3 brdf = CookTorranceBRDF(brdf_args, dir, -ray.d, hit.normal, uWalterG1Fix != 0);
 	float cosine = abs(dot(hit.normal, dir));
 	vec3 color = NormalizeRGB(brdf * cosine / pdf);
 	BRDFStepInfo info;
@@ -425,6 +452,19 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 		}
 	}
 
+	// Without bootstrap, only fully path-traced targets are valid. Discard the
+	// entire unfinished path before reserving train slots so stale/partial
+	// records can never enter the optimizer batch.
+	if (!light_terminate && uNRCBootstrap == 0) {
+		if (uFrameMetricsEnabled != 0) {
+			atomicAdd(uFrameMetrics[DIAG_TRAIN_GENERATED], bounce, gl_ScopeQueueFamily,
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
+			atomicAdd(uFrameMetrics[DIAG_TRAIN_INCOMPLETE_REJECTED], bounce, gl_ScopeQueueFamily,
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
+		}
+		return result;
+	}
+
 	uint batch = clamp(uint(RNGNext() * NRC_TRAIN_BATCH_COUNT), 0u, NRC_TRAIN_BATCH_COUNT - 1);
 	uint train_id = atomicAdd(uBatchTrainCounts[batch].count, bounce, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer,
 	                          gl_SemanticsAcquireRelease);
@@ -434,6 +474,12 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 			colors[i] *= colors[i + 1];
 		}
 		uint train_count = min(bounce, NRC_TRAIN_BATCH_SIZE - train_id);
+		if (uFrameMetricsEnabled != 0) {
+			atomicAdd(uFrameMetrics[DIAG_TRAIN_GENERATED], train_count, gl_ScopeQueueFamily,
+			          gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
+			atomicAdd(uFrameMetrics[light_terminate ? DIAG_TRAIN_PT_ACCEPTED : DIAG_TRAIN_BOOTSTRAP_ACCEPTED],
+			          train_count, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
+		}
 		for (uint i = 0; i < train_count; ++i) {
 			NRCTrainRecord train_record;
 			train_record.bias_r = lights[i].r;
@@ -444,9 +490,11 @@ PathTraceResult ExtendedPathTrace(Hit hit, Ray ray, in const uint method) {
 			train_record.factor_b = colors[i].b;
 			train_record.packed_input = inputs[i];
 			uBatchTrainRecords[batch].records[train_id + i] = train_record;
+			if (uFrameMetricsEnabled != 0 && light_terminate)
+				RecordDiagnosticStage(DIAG_PT_TARGET_BASE, lights[i]);
 		}
 
-		if (!light_terminate) {
+		if (!light_terminate && uNRCBootstrap != 0) {
 			uint eval_id =
 			    atomicAdd(uEvalCount, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease);
 			NRCEvalRecord eval_record;
@@ -502,4 +550,6 @@ void main() {
 	result.factor = NormalizeRGB(result.factor);
 	imageStore(uBias_FactorR, ivec2(coord), vec4(result.bias, result.factor.r));
 	imageStore(uFactorGB, ivec2(coord), vec4(result.factor.gb, 0, 0));
+	imageStore(uBeforeResolve, ivec2(coord), vec4(result.bias, 1));
+	imageStore(uResolvedPreOverlay, ivec2(coord), vec4(result.bias, 1));
 }

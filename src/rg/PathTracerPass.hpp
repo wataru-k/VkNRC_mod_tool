@@ -24,6 +24,7 @@ public:
 		const SceneResources &scene_resources;
 		const myvk::Ptr<VkNRCState> &nrc_state_ptr;
 		const myvk_rg::Buffer &eval_count, &eval_records;
+		const myvk_rg::Buffer &frame_metrics;
 		std::span<const myvk_rg::Buffer, VkNRCState::GetTrainBatchCount()> batch_train_records, batch_train_counts;
 		const myvk::Ptr<Camera> &camera_ptr;
 	};
@@ -40,8 +41,11 @@ public:
 	void CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const final;
 	inline auto GetBiasFactorROutput() const { return MakeImageOutput({"bias_factor_r"}); }
 	inline auto GetFactorGBOutput() const { return MakeImageOutput({"factor_gb"}); }
+	inline auto GetBeforeResolveOutput() const { return MakeImageOutput({"before_resolve"}); }
+	inline auto GetResolvedPreOverlayOutput() const { return MakeImageOutput({"resolved_pre_overlay"}); }
 	inline auto GetEvalCountOutput() const { return MakeBufferOutput({"eval_count"}); }
 	inline auto GetEvalRecordsOutput() const { return MakeBufferOutput({"eval_records"}); }
+	inline auto GetFrameMetricsOutput() const { return MakeBufferOutput({"frame_metrics"}); }
 	inline auto GetBatchTrainCountOutput(uint32_t batch_index) const {
 		return MakeBufferOutput({"batch_train_count", batch_index});
 	}

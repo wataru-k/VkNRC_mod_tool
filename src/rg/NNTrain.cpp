@@ -33,7 +33,7 @@ void NNTrain::NNPreparePass::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &co
 }
 
 NNTrain::NNGradient::NNGradient(myvk_rg::Parent parent, const Args &args)
-    : myvk_rg::ComputePassBase(parent), m_scene_ptr(args.scene_ptr) {
+    : myvk_rg::ComputePassBase(parent), m_scene_ptr(args.scene_ptr), m_nrc_state_ptr(args.nrc_state_ptr) {
 	AddInput<myvk_rg::Usage::kDrawIndirectBuffer>({"cmd"}, args.cmd);
 	// Scene
 	AddDescriptorInput<myvk_rg::Usage::kStorageBufferR, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
@@ -64,10 +64,13 @@ NNTrain::NNGradient::NNGradient(myvk_rg::Parent parent, const Args &args)
 	                                                                                            args.weights);
 	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>({11}, {"gradients"},
 	                                                                                             args.gradients);
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {12}, {"frame_metrics"}, args.frame_metrics);
 }
 myvk::Ptr<myvk::ComputePipeline> NNTrain::NNGradient::CreatePipeline() const {
 	auto &device = GetRenderGraphPtr()->GetDevicePtr();
-	auto pipeline_layout = myvk::PipelineLayout::Create(device, {GetVkDescriptorSetLayout()}, {});
+	auto pipeline_layout = myvk::PipelineLayout::Create(
+	    device, {GetVkDescriptorSetLayout()}, {{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t)}});
 	auto [shader_module, required_subgroup_info] = NNGradientShader::Create(device);
 	shader_module->AddSpecialization(0, (uint32_t)m_scene_ptr->GetTextures().size());
 	VkPipelineShaderStageCreateInfo shader_stage =
@@ -83,6 +86,9 @@ myvk::Ptr<myvk::ComputePipeline> NNTrain::NNGradient::CreatePipeline() const {
 void NNTrain::NNGradient::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const {
 	command_buffer->CmdBindPipeline(GetVkPipeline());
 	command_buffer->CmdBindDescriptorSets({GetVkDescriptorSet()}, GetVkPipeline());
+	uint32_t frame_metrics = m_nrc_state_ptr->IsFrameMetricsEnabled();
+	command_buffer->CmdPushConstants(GetVkPipeline()->GetPipelineLayoutPtr(), VK_SHADER_STAGE_COMPUTE_BIT, 0,
+	                                 sizeof(frame_metrics), &frame_metrics);
 	command_buffer->CmdDispatchIndirect(GetInputBuffer({"cmd"})->GetBufferView().buffer);
 }
 
@@ -102,11 +108,13 @@ NNTrain::NNOptimizer::NNOptimizer(myvk_rg::Parent parent, const Args &args)
 	    {4}, {"batch_train_count"}, args.count);
 	AddDescriptorInput<myvk_rg::Usage::kUniformBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>({5}, {"optimizer_state"},
 	                                                                                           args.optimizer_state);
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT>(
+	    {6}, {"frame_metrics"}, args.frame_metrics);
 }
 myvk::Ptr<myvk::ComputePipeline> NNTrain::NNOptimizer::CreatePipeline() const {
 	auto &device = GetRenderGraphPtr()->GetDevicePtr();
 	auto pipeline_layout = myvk::PipelineLayout::Create(
-	    device, {GetVkDescriptorSetLayout()}, {{.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = sizeof(uint32_t)}});
+	    device, {GetVkDescriptorSetLayout()}, {{.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .size = 2 * sizeof(uint32_t)}});
 	myvk::Ptr<myvk::ShaderModule> shader_module;
 	if (m_write_use) {
 		static constexpr uint32_t kCompSpv[] = {
@@ -124,11 +132,9 @@ myvk::Ptr<myvk::ComputePipeline> NNTrain::NNOptimizer::CreatePipeline() const {
 void NNTrain::NNOptimizer::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const {
 	command_buffer->CmdBindPipeline(GetVkPipeline());
 	command_buffer->CmdBindDescriptorSets({GetVkDescriptorSet()}, GetVkPipeline());
-	if (m_write_use) {
-		uint32_t use_ema_weights = m_nrc_state_ptr->IsUseEMAWeights();
-		command_buffer->CmdPushConstants(GetVkPipeline()->GetPipelineLayoutPtr(), VK_SHADER_STAGE_COMPUTE_BIT, 0,
-		                                 sizeof(use_ema_weights), &use_ema_weights);
-	}
+	uint32_t controls[2] = {m_nrc_state_ptr->IsUseEMAWeights(), m_nrc_state_ptr->IsFrameMetricsEnabled()};
+	command_buffer->CmdPushConstants(GetVkPipeline()->GetPipelineLayoutPtr(), VK_SHADER_STAGE_COMPUTE_BIT, 0,
+	                                 sizeof(controls), controls);
 	command_buffer->CmdDispatch(VkNRCState::GetWeightCount() / 64, 1, 1);
 }
 

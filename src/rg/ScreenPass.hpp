@@ -15,7 +15,9 @@ class ScreenPass final : public myvk_rg::GraphicsPassBase {
 public:
 	struct Args {
 		const myvk::Ptr<VkNRCState> &nrc_state_ptr;
-		const myvk_rg::Image &accumulate_image, &color_image, &screen_image;
+		const myvk_rg::Image &accumulate_image, &color_image, &before_resolve_image, &resolved_pre_overlay_image,
+		    &screen_image;
+		const myvk_rg::Buffer &frame_metrics;
 	};
 
 private:

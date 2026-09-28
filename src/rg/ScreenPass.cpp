@@ -8,7 +8,7 @@ namespace rg {
 
 namespace screen_pass {
 struct PushConstant_Data {
-	uint32_t accumulate_flag, accumulate_count;
+	uint32_t accumulate_flag, accumulate_count, frame_metrics;
 };
 } // namespace screen_pass
 using screen_pass::PushConstant_Data;
@@ -19,6 +19,12 @@ ScreenPass::ScreenPass(myvk_rg::Parent parent, const Args &args)
 	AddInputAttachmentInput(0, {0}, {"color"}, args.color_image);
 	AddDescriptorInput<myvk_rg::Usage::kStorageImageRW, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT>({1}, {"accumulate"},
 	                                                                                             args.accumulate_image);
+	AddDescriptorInput<myvk_rg::Usage::kStorageBufferRW, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT>(
+	    {2}, {"frame_metrics"}, args.frame_metrics);
+	AddDescriptorInput<myvk_rg::Usage::kStorageImageR, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT>(
+	    {3}, {"before_resolve"}, args.before_resolve_image);
+	AddDescriptorInput<myvk_rg::Usage::kStorageImageR, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT>(
+	    {4}, {"resolved_pre_overlay"}, args.resolved_pre_overlay_image);
 }
 
 myvk::Ptr<myvk::GraphicsPipeline> ScreenPass::CreatePipeline() const {
@@ -59,7 +65,8 @@ myvk::Ptr<myvk::GraphicsPipeline> ScreenPass::CreatePipeline() const {
 
 void ScreenPass::CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const {
 	PushConstant_Data pc_data{.accumulate_flag = m_nrc_state_ptr->IsAccumulate(),
-	                          .accumulate_count = m_nrc_state_ptr->GetAccumulateCount()};
+	                          .accumulate_count = m_nrc_state_ptr->GetAccumulateCount(),
+	                          .frame_metrics = m_nrc_state_ptr->IsFrameMetricsEnabled()};
 	command_buffer->CmdBindPipeline(GetVkPipeline());
 	command_buffer->CmdBindDescriptorSets({GetVkDescriptorSet()}, GetVkPipeline());
 	command_buffer->CmdPushConstants(GetVkPipeline()->GetPipelineLayoutPtr(), VK_SHADER_STAGE_FRAGMENT_BIT, 0,

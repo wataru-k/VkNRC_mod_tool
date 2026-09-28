@@ -25,6 +25,7 @@ public:
 		const myvk::Ptr<VkScene> &scene_ptr;
 		const SceneResources &scene_resources;
 		const myvk_rg::Buffer &batch_train_count, &batch_train_records;
+		const myvk_rg::Buffer &frame_metrics;
 	};
 
 private:
@@ -53,12 +54,14 @@ private:
 	public:
 		struct Args {
 			const myvk::Ptr<VkScene> &scene_ptr;
+			const myvk::Ptr<VkNRCState> &nrc_state_ptr;
 			const SceneResources &scene_resources;
-			const myvk_rg::Buffer &cmd, &gradients, &count, &records, &weights;
+			const myvk_rg::Buffer &cmd, &gradients, &count, &records, &weights, &frame_metrics;
 		};
 
 	private:
 		myvk::Ptr<VkScene> m_scene_ptr;
+		myvk::Ptr<VkNRCState> m_nrc_state_ptr;
 
 	public:
 		NNGradient(myvk_rg::Parent parent, const Args &args);
@@ -66,6 +69,7 @@ private:
 		myvk::Ptr<myvk::ComputePipeline> CreatePipeline() const final;
 		void CmdExecute(const myvk::Ptr<myvk::CommandBuffer> &command_buffer) const final;
 		inline auto GetGradientOutput() const { return MakeBufferOutput({"gradients"}); }
+		inline auto GetFrameMetricsOutput() const { return MakeBufferOutput({"frame_metrics"}); }
 	};
 
 	class NNOptimizer final : public myvk_rg::ComputePassBase {
@@ -74,7 +78,7 @@ private:
 			const myvk::Ptr<VkNRCState> &nrc_state_ptr;
 			const myvk_rg::Buffer &gradients, &count, &weights;
 			const std::optional<myvk_rg::Buffer> &opt_use_weights;
-			const myvk_rg::Buffer &optimizer_state, &optimizer_entries;
+			const myvk_rg::Buffer &optimizer_state, &optimizer_entries, &frame_metrics;
 		};
 
 	private:
@@ -89,6 +93,7 @@ private:
 		inline auto GetWeightOutput() const { return MakeBufferOutput({"weights"}); }
 		inline auto GetEMAWeightOutput() const { return MakeBufferOutput({"use_weights"}); }
 		inline auto GetOptimizerEntriesOutput() const { return MakeBufferOutput({"optimizer_entries"}); }
+		inline auto GetFrameMetricsOutput() const { return MakeBufferOutput({"frame_metrics"}); }
 	};
 
 public:
@@ -101,12 +106,14 @@ public:
 		                                                                    .optimizer_state = args.optimizer_state});
 		auto gradient_pass =
 		    CreatePass<NNGradient>({"gradient_pass"}, NNGradient::Args{.scene_ptr = args.scene_ptr,
+		                                                               .nrc_state_ptr = args.nrc_state_ptr,
 		                                                               .scene_resources = args.scene_resources,
 		                                                               .cmd = prepare_pass->GetIndirectCmdOutput(),
 		                                                               .gradients = clear_pass->GetDstOutput(),
 		                                                               .count = prepare_pass->GetCountOutput(),
 		                                                               .records = args.batch_train_records,
-		                                                               .weights = args.weights});
+		                                                               .weights = args.weights,
+		                                                               .frame_metrics = args.frame_metrics});
 		CreatePass<NNOptimizer>({"optimizer_pass"},
 		                        NNOptimizer::Args{.nrc_state_ptr = args.nrc_state_ptr,
 		                                          .gradients = gradient_pass->GetGradientOutput(),
@@ -114,13 +121,17 @@ public:
 		                                          .weights = args.weights,
 		                                          .opt_use_weights = args.opt_use_weights,
 		                                          .optimizer_state = prepare_pass->GetOptimizerStateOutput(),
-		                                          .optimizer_entries = args.optimizer_entries});
+		                                          .optimizer_entries = args.optimizer_entries,
+		                                          .frame_metrics = gradient_pass->GetFrameMetricsOutput()});
 	}
 	inline ~NNTrain() final = default;
 	inline auto GetWeightOutput() const { return GetPass<NNOptimizer>({"optimizer_pass"})->GetWeightOutput(); }
 	inline auto GetEMAWeightOutput() const { return GetPass<NNOptimizer>({"optimizer_pass"})->GetEMAWeightOutput(); }
 	inline auto GetOptimizerEntriesOutput() const {
 		return GetPass<NNOptimizer>({"optimizer_pass"})->GetOptimizerEntriesOutput();
+	}
+	inline auto GetFrameMetricsOutput() const {
+		return GetPass<NNOptimizer>({"optimizer_pass"})->GetFrameMetricsOutput();
 	}
 	inline auto GetOptimizerStateOutput() const {
 		return GetPass<NNPreparePass>({"prepare_pass"})->GetOptimizerStateOutput();

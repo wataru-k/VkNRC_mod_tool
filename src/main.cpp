@@ -10,11 +10,39 @@
 #include <bit>
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <optional>
 
 #include "rg/NRCRenderGraph.hpp"
 
 constexpr uint32_t kFrameCount = 3, kWidth = 1280, kHeight = 720;
+
+namespace {
+double HistogramPercentile(const rg::NRCRenderGraph::DiagnosticStageMetrics &stage, double quantile) {
+	uint64_t finite_count = 0;
+	for (uint32_t count : stage.histogram)
+		finite_count += count;
+	if (finite_count == 0)
+		return 0.0;
+	uint64_t target = static_cast<uint64_t>(std::ceil(quantile * finite_count));
+	uint64_t cumulative = 0;
+	for (uint32_t bin = 0; bin < stage.histogram.size(); ++bin) {
+		cumulative += stage.histogram[bin];
+		if (cumulative >= target)
+			return std::exp2(static_cast<double>(bin) - 15.5);
+	}
+	return std::exp2(47.5);
+}
+
+void LogStageMetrics(uint64_t frame, const char *name,
+	                 const rg::NRCRenderGraph::DiagnosticStageMetrics &stage) {
+	spdlog::info("Frame stage: frame={}, stage={}, total={}, nonfinite={}, negative={}, p50={}, p95={}, p99={}, "
+	             "p99.9={}, max={}",
+	             frame, name, stage.total, stage.nonfinite, stage.negative, HistogramPercentile(stage, 0.5),
+	             HistogramPercentile(stage, 0.95), HistogramPercentile(stage, 0.99),
+	             HistogramPercentile(stage, 0.999), std::bit_cast<float>(stage.max_luminance_bits));
+}
+} // namespace
 
 int main(int argc, char **argv) {
 	if (argc < 2) {
@@ -24,6 +52,9 @@ int main(int argc, char **argv) {
 	const char *scene_path = argv[1];
 	bool command_line_whiteout_diagnostic = false, command_line_whiteout_guard = false;
 	bool command_line_rtxgi_reference_lighting = false;
+	bool command_line_nrc_bootstrap = true, command_line_nrc_training = true, command_line_nrc_contribution = true;
+	bool command_line_frame_metrics = false;
+	bool command_line_walter_g1_fix = false;
 	float command_line_whiteout_threshold = 100.0f;
 	uint64_t command_line_frame_limit = 0;
 	std::optional<uint32_t> command_line_seed;
@@ -48,6 +79,16 @@ int main(int argc, char **argv) {
 			command_line_whiteout_guard = true;
 		} else if (std::strcmp(argv[i], "--rtxgi-reference-lighting") == 0) {
 			command_line_rtxgi_reference_lighting = true;
+		} else if (std::strcmp(argv[i], "--nrc-bootstrap-off") == 0) {
+			command_line_nrc_bootstrap = false;
+		} else if (std::strcmp(argv[i], "--nrc-training-off") == 0) {
+			command_line_nrc_training = false;
+		} else if (std::strcmp(argv[i], "--nrc-contribution-off") == 0) {
+			command_line_nrc_contribution = false;
+		} else if (std::strcmp(argv[i], "--frame-metrics") == 0) {
+			command_line_frame_metrics = true;
+		} else if (std::strcmp(argv[i], "--brdf-walter-g1-fix") == 0) {
+			command_line_walter_g1_fix = true;
 		} else if (std::strcmp(argv[i], "--whiteout-threshold") == 0 && i + 1 < argc) {
 			char *end = nullptr;
 			command_line_whiteout_threshold = std::strtof(argv[++i], &end);
@@ -175,11 +216,20 @@ int main(int argc, char **argv) {
 	vk_nrc_state->SetWhiteoutDiagnostic(command_line_whiteout_diagnostic);
 	vk_nrc_state->SetWhiteoutGuard(command_line_whiteout_guard);
 	vk_nrc_state->SetRTXGIReferenceLighting(command_line_rtxgi_reference_lighting);
+	vk_nrc_state->SetNRCBootstrapEnabled(command_line_nrc_bootstrap);
+	vk_nrc_state->SetNRCContributionEnabled(command_line_nrc_contribution);
+	vk_nrc_state->SetFrameMetricsEnabled(command_line_frame_metrics);
+	vk_nrc_state->SetWalterG1FixEnabled(command_line_walter_g1_fix);
 	vk_nrc_state->SetWhiteoutLuminanceThreshold(command_line_whiteout_threshold);
 	spdlog::info("Whiteout diagnostic: {}, guard: {}, luminance threshold: {}",
 	             command_line_whiteout_diagnostic, command_line_whiteout_guard, command_line_whiteout_threshold);
 	spdlog::info("RNG seed: {}", vk_nrc_state->GetRNGSeed());
 	spdlog::info("RTXGI reference lighting: {}", command_line_rtxgi_reference_lighting);
+	spdlog::info("NRC controls: bootstrap={}, training={}, display-contribution={}", command_line_nrc_bootstrap,
+	             command_line_nrc_training, command_line_nrc_contribution);
+	spdlog::info("Frame metrics: {} (fixed Hejl2015 white point 3.2, diagnostic pre-overlay)",
+	             command_line_frame_metrics);
+	spdlog::info("BRDF Walter G1 visibility fix: {}", command_line_walter_g1_fix);
 
 	auto frame_manager = myvk::FrameManager::Create(generic_queue, present_queue, false, kFrameCount);
 	frame_manager->SetResizeFunc([&](VkExtent2D extent) {
@@ -189,6 +239,9 @@ int main(int argc, char **argv) {
 	std::array<myvk::Ptr<rg::NRCRenderGraph>, kFrameCount> render_graphs;
 	for (auto &rg : render_graphs)
 		rg = myvk::MakePtr<rg::NRCRenderGraph>(frame_manager, vk_scene_tlas, vk_nrc_state, camera);
+	std::array<bool, kFrameCount> slot_has_metrics{};
+	std::array<uint64_t, kFrameCount> slot_metric_frame{};
+	std::map<uint64_t, rg::NRCRenderGraph::FrameMetrics> frame_metrics;
 
 	bool view_accumulate = vk_nrc_state->IsAccumulate();
 	int view_left_method = static_cast<int>(vk_nrc_state->GetLeftMethod());
@@ -276,12 +329,19 @@ int main(int argc, char **argv) {
 
 		if (nrc_lock && !nrc_train_one_frame)
 			vk_nrc_state->SetTrainProbability(0.0f);
-		else
+		else if (command_line_nrc_training)
 			vk_nrc_state->SetTrainProbability(VkNRCState::GetDefaultTrainProbability());
+		else
+			vk_nrc_state->SetTrainProbability(0.0f);
 
 		if (frame_manager->NewFrame()) {
 			const auto &command_buffer = frame_manager->GetCurrentCommandBuffer();
-			auto &render_graph = render_graphs[frame_manager->GetCurrentFrame()];
+			uint32_t frame_slot = frame_manager->GetCurrentFrame();
+			auto &render_graph = render_graphs[frame_slot];
+			if (command_line_frame_metrics && slot_has_metrics[frame_slot]) {
+				frame_metrics[slot_metric_frame[frame_slot]] = render_graph->GetFrameMetrics();
+				slot_has_metrics[frame_slot] = false;
+			}
 
 			command_buffer->Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 			render_graph->SetCanvasSize(frame_manager->GetExtent());
@@ -290,6 +350,10 @@ int main(int argc, char **argv) {
 
 			frame_manager->Render();
 			++rendered_frame_count;
+			if (command_line_frame_metrics) {
+				slot_has_metrics[frame_slot] = true;
+				slot_metric_frame[frame_slot] = rendered_frame_count;
+			}
 			if (command_line_frame_limit != 0 && rendered_frame_count >= command_line_frame_limit) {
 				spdlog::info("Completed requested {} rendered frames", rendered_frame_count);
 				glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -300,6 +364,50 @@ int main(int argc, char **argv) {
 	}
 
 	frame_manager->WaitIdle();
+	if (command_line_frame_metrics) {
+		for (uint32_t frame_slot = 0; frame_slot < kFrameCount; ++frame_slot) {
+			if (slot_has_metrics[frame_slot])
+				frame_metrics[slot_metric_frame[frame_slot]] = render_graphs[frame_slot]->GetFrameMetrics();
+		}
+		uint32_t consecutive = 0, max_consecutive = 0;
+		uint64_t first_display_whiteout_frame = 0;
+		bool display_metrics_valid = true;
+		constexpr std::array<const char *, 19> stage_names = {
+		    "before",          "raw",      "factor",   "contribution", "after",
+		    "final-pre-overlay", "pt-target", "bootstrap-target", "train-prediction", "loss",
+		    "gradient",        "update",   "weight",   "ema-weight", "brdf",
+		    "brdf-pdf",        "brdf-cosine", "brdf-throughput", "brdf-roughness"};
+		for (const auto &[frame, metrics] : frame_metrics) {
+			for (uint32_t stage = 0; stage < metrics.stages.size(); ++stage)
+				LogStageMetrics(frame, stage_names[stage], metrics.stages[stage]);
+			double before_ratio = metrics.screen_total == 0 ? 0.0 : double(metrics.before_white) / metrics.screen_total;
+			double final_ratio = metrics.screen_total == 0 ? 0.0 : double(metrics.final_white) / metrics.screen_total;
+			bool frame_valid = metrics.screen_total == uint64_t(kWidth) * kHeight && metrics.stages[5].nonfinite == 0;
+			display_metrics_valid = display_metrics_valid && frame_valid;
+			bool candidate = frame_valid && final_ratio >= 0.50 && final_ratio - before_ratio >= 0.25;
+			consecutive = candidate ? consecutive + 1 : 0;
+			max_consecutive = std::max(max_consecutive, consecutive);
+			if (consecutive == 3 && first_display_whiteout_frame == 0)
+				first_display_whiteout_frame = frame - 2;
+			spdlog::info("Frame WhiteOut: frame={}, valid={}, pixels={}, before-white={}, before-ratio={}, final-white={}, "
+			             "final-ratio={}, delta={}, candidate={}, consecutive={}",
+			             frame, frame_valid, metrics.screen_total, metrics.before_white, before_ratio, metrics.final_white, final_ratio,
+			             final_ratio - before_ratio, candidate, consecutive);
+			spdlog::info("Frame train records: frame={}, generated={}, pt-accepted={}, bootstrap-accepted={}, "
+			             "incomplete-rejected={}",
+			             frame, metrics.train_generated, metrics.train_pt_accepted, metrics.train_bootstrap_accepted,
+			             metrics.train_incomplete_rejected);
+			spdlog::info("Frame BRDF samples: frame={}, total={}, below-hemisphere={}, bad-pdf={}, "
+			             "nonfinite-throughput={}",
+			             frame, metrics.brdf_step_total, metrics.brdf_below_hemisphere, metrics.brdf_bad_pdf,
+			             metrics.brdf_nonfinite_throughput);
+		}
+		spdlog::info("Display WhiteOut: valid={}, detected={}, first-frame={}, max-consecutive={}, measured-frames={}, "
+		             "criterion=Y>=0.95,chroma<=0.05,coverage>=0.50,delta>=0.25,persistence>=3,white-point=3.2",
+		             display_metrics_valid, display_metrics_valid && first_display_whiteout_frame != 0,
+		             first_display_whiteout_frame, max_consecutive,
+		             frame_metrics.size());
+	}
 	uint64_t invalid_count = 0, overbright_count = 0, evaluated_count = 0;
 	float max_luminance = 0.0f;
 	for (const auto &render_graph : render_graphs) {

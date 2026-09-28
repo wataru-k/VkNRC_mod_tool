@@ -1,0 +1,231 @@
+{
+  "approvalBundle": {
+    "actions": [
+      {
+        "actions": [
+          "gpu",
+          "native"
+        ],
+        "ownerTask": "/root",
+        "resources": [
+          "cpu",
+          "build",
+          "gpu"
+        ],
+        "task": "walter-g1-ab",
+        "wave": "walter-g1-serial"
+      }
+    ],
+    "canRequestNow": true,
+    "id": "20260916-walter-g1-ab-001:important-actions",
+    "invalidationConditions": [
+      "error or noncanonical result",
+      "branch, HEAD, scope, dependency, or provenance drift",
+      "resource lease conflict",
+      "claim-boundary change"
+    ],
+    "preconditions": [
+      "canonical Current is unchanged",
+      "dependencies and aggregate gates are complete",
+      "Git/index/scope drift is absent",
+      "required provenance is complete",
+      "exclusive resource leases are available"
+    ],
+    "required": true,
+    "singleRequest": true
+  },
+  "blockers": [],
+  "canonicalCurrent": {
+    "gate": "PathTracerCorrectness",
+    "node": "WalterG1-isolated-A-B",
+    "stagePlanPath": "docs/bootstrap-whiteout-isolation.md"
+  },
+  "coordinatorResumeBundle": {
+    "blockedOriginalTasks": [],
+    "id": "20260916-walter-g1-ab-001:coordinator-resume",
+    "required": false,
+    "resumeRule": "Create a new reviewed snapshot. Never dispatch retry execution directly from this bundle.",
+    "reviewNodes": []
+  },
+  "coordinatorWakeupRequired": false,
+  "dispatchPrompts": [],
+  "driftFindings": [],
+  "externalDecisionBundle": {
+    "excludes": [
+      "blocked_actionable",
+      "blocked_terminal",
+      "read-only recovery"
+    ],
+    "id": "20260916-walter-g1-ab-001:external-decisions",
+    "items": [],
+    "required": false,
+    "singleRequest": true
+  },
+  "highSignals": [],
+  "inventory": [
+    {
+      "baseHead": "6ce0b224acf5a488fc9a09d190c7ed109e257849",
+      "blockers": [],
+      "branch": "codex/bootstrap-whiteout-isolation",
+      "capabilities": {
+        "build": true,
+        "capture": false,
+        "commit": false,
+        "edit": true,
+        "gpu": true,
+        "merge": false,
+        "native": true,
+        "push": false,
+        "readOnly": false
+      },
+      "claimBoundary": {
+        "experimentReadiness": "ready",
+        "reason": "User authorized implementation, build, fresh #02 preflight, and one create-new 60-frame diagnostic; scientific claim requires complete metrics review.",
+        "scientificClaimEligibility": "blocked"
+      },
+      "dependencies": [],
+      "exactFileScope": {
+        "artifactRoots": [
+          "E:/VkNRC_mod_tool/build-vs",
+          "E:/VkNRC_mod_tool/build-vs/bootstrap-isolation/20260916-bistro-walter-g1-fix-60f-v1"
+        ],
+        "read": [
+          "E:/VkNRC_mod_tool/shader",
+          "E:/VkNRC_mod_tool/src",
+          "E:/VkNRC_mod_tool/build-vs/scenes/bistro-full",
+          "E:/VkNRC_mod_tool/build-vs/bootstrap-isolation/20260916-bistro-brdf-tail-v2"
+        ],
+        "write": [
+          "shader/CMakeLists.txt",
+          "shader/src/Diagnostics.glsl",
+          "shader/src/nrc_gradient.comp",
+          "shader/src/nrc_inference.comp",
+          "shader/src/nrc_optimize.comp",
+          "shader/src/path_tracer.comp",
+          "shader/src/screen.frag",
+          "src/VkNRCState.hpp",
+          "src/main.cpp",
+          "src/rg/NNInference.cpp",
+          "src/rg/NNInference.hpp",
+          "src/rg/NNTrain.cpp",
+          "src/rg/NNTrain.hpp",
+          "src/rg/NRCRenderGraph.cpp",
+          "src/rg/NRCRenderGraph.hpp",
+          "src/rg/PathTracerPass.cpp",
+          "src/rg/PathTracerPass.hpp",
+          "src/rg/ScreenPass.cpp",
+          "src/rg/ScreenPass.hpp",
+          "docs/bootstrap-whiteout-isolation.md",
+          "docs/results/2026-09-11-bistro-bootstrap-isolation-preflight.md",
+          "docs/results/2026-09-12-bistro-formal-whiteout-isolation.json",
+          "docs/results/2026-09-12-bistro-formal-whiteout-isolation.md",
+          "docs/results/2026-09-12-bistro-training-rootcause-15f.md",
+          "docs/results/2026-09-12-path-tracer-brdf-cpu-audit.md",
+          "docs/results/2026-09-16-bistro-brdf-tail-60f.md",
+          "shader/src/CookTorranceBRDF.glsl",
+          "tools/check-brdf-invariants.py",
+          "tools/run-bootstrap-isolation.ps1",
+          "docs/orchestration/20260916-walter-g1-ab-project.json",
+          "docs/orchestration/20260916-walter-g1-ab-ledger.json",
+          "docs/orchestration/20260916-walter-g1-ab-status.md",
+          "E:/VkNRC_mod_tool/build-vs",
+          "E:/VkNRC_mod_tool/build-vs/bootstrap-isolation/20260916-bistro-walter-g1-fix-60f-v1"
+        ]
+      },
+      "head": "6ce0b224acf5a488fc9a09d190c7ed109e257849",
+      "id": "walter-g1-ab",
+      "owner": "root",
+      "ownerTask": "/root",
+      "requestedResources": [
+        "cpu",
+        "build",
+        "gpu"
+      ],
+      "retryCount": 0,
+      "retryReview": null,
+      "runtimeSourceCommit": "6ce0b224acf5a488fc9a09d190c7ed109e257849",
+      "state": "ready",
+      "taskId": "current",
+      "working": "E:/VkNRC_mod_tool",
+      "workspaceHead": "6ce0b224acf5a488fc9a09d190c7ed109e257849"
+    }
+  ],
+  "ledgerVersion": "parallel-work-ledger/v0",
+  "nextExecutableTasks": [
+    "walter-g1-ab"
+  ],
+  "nextRunnableTasks": [
+    "walter-g1-ab"
+  ],
+  "noRunnableExplanation": {
+    "details": [],
+    "reason": "runnable_work_available"
+  },
+  "parallelismConflicts": [],
+  "recoveryActions": [],
+  "resourceLeases": {
+    "capacities": [
+      {
+        "capacity": 1,
+        "id": "build",
+        "kind": "build"
+      },
+      {
+        "capacity": 1,
+        "id": "cpu",
+        "kind": "cpu"
+      },
+      {
+        "capacity": 1,
+        "id": "gpu",
+        "kind": "gpu"
+      }
+    ],
+    "held": [],
+    "planned": [
+      {
+        "owner": "walter-g1-ab",
+        "resource": "build",
+        "state": "planned",
+        "wave": "walter-g1-serial"
+      },
+      {
+        "owner": "walter-g1-ab",
+        "resource": "cpu",
+        "state": "planned",
+        "wave": "walter-g1-serial"
+      },
+      {
+        "owner": "walter-g1-ab",
+        "resource": "gpu",
+        "state": "planned",
+        "wave": "walter-g1-serial"
+      }
+    ]
+  },
+  "safety": {
+    "autonomousActions": [],
+    "createNewOnly": true,
+    "hardStopOnDrift": true,
+    "noAutomaticRetry": true,
+    "proposalOnly": true
+  },
+  "source": {
+    "projectId": "vknrc-whiteout-root-cause",
+    "snapshotId": "20260916-walter-g1-ab-001"
+  },
+  "waves": [
+    {
+      "derivedStatus": "ready",
+      "id": "walter-g1-serial",
+      "kind": "serial",
+      "requiresWaves": [],
+      "serialOrder": [
+        "walter-g1-ab"
+      ],
+      "tasks": [
+        "walter-g1-ab"
+      ]
+    }
+  ]
+}

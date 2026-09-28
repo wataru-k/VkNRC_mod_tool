@@ -27,6 +27,9 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
       m_scene_ptr(scene_tlas_ptr->GetScenePtr()), m_nrc_state_ptr(nrc_state_ptr) {
 	SceneResources scene_resources = create_scene_resources();
 	NRCResources nrc_resources = create_nrc_resources();
+	auto frame_metrics_resource =
+	    CreateResource<myvk_rg::ManagedBuffer>({"frame_metrics"}, sizeof(FrameMetrics));
+	frame_metrics_resource->SetMapped(true);
 
 	auto vbuffer_pass = CreatePass<VBufferPass>(
 	    {"vbuffer_pass"},
@@ -39,6 +42,7 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
 	                                               .nrc_state_ptr = m_nrc_state_ptr,
 	                                               .eval_count = nrc_resources.eval_count,
 	                                               .eval_records = nrc_resources.eval_records,
+	                                               .frame_metrics = frame_metrics_resource->Alias(),
 	                                               .batch_train_records = nrc_resources.batch_train_records,
 	                                               .batch_train_counts = nrc_resources.batch_train_counts,
 	                                               .camera_ptr = camera_ptr});
@@ -50,15 +54,18 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
 	                      .scene_resources = scene_resources,
 	                      .bias_factor_r = path_tracer_pass->GetBiasFactorROutput(),
 	                      .factor_gb = path_tracer_pass->GetFactorGBOutput(),
+	                      .resolved_pre_overlay = path_tracer_pass->GetResolvedPreOverlayOutput(),
 	                      .weights = nrc_resources.use_weights,
 	                      .eval_count = path_tracer_pass->GetEvalCountOutput(),
 	                      .eval_records = path_tracer_pass->GetEvalRecordsOutput(),
 	                      .whiteout_counters = CreateResource<myvk_rg::ManagedBuffer>(
 	                                                {"whiteout_counters"}, sizeof(WhiteoutCounters))
 	                                                ->Alias(),
+	                      .frame_metrics = path_tracer_pass->GetFrameMetricsOutput(),
 	                      .batch_train_records = path_tracer_pass->GetBatchTrainRecordsOutputs()});
 	GetResource<myvk_rg::ManagedBuffer>({"whiteout_counters"})->SetMapped(true);
 
+	myvk_rg::Buffer frame_metrics = nn_inference_pass->Get()->GetFrameMetricsOutput();
 	for (uint32_t b = 0; b < VkNRCState::GetTrainBatchCount(); ++b) {
 		myvk_rg::Buffer weights = nrc_resources.weights, optimizer_entries = nrc_resources.optimizer_entries,
 		                optimizer_state = nrc_resources.optimizer_state;
@@ -71,7 +78,7 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
 		std::optional<myvk_rg::Buffer> opt_use_weights = std::nullopt;
 		if (b == VkNRCState::GetTrainBatchCount() - 1)
 			opt_use_weights = nrc_resources.use_weights;
-		CreatePass<NNTrain>(
+		auto train_pass = CreatePass<NNTrain>(
 		    {"nn_train_pass", b},
 		    NNTrain::Args{.nrc_state_ptr = m_nrc_state_ptr,
 		                  .weights = weights,
@@ -81,7 +88,9 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
 		                  .scene_ptr = m_scene_ptr,
 		                  .scene_resources = scene_resources,
 		                  .batch_train_count = path_tracer_pass->GetBatchTrainCountOutput(b),
-		                  .batch_train_records = nn_inference_pass->Get()->GetBatchTrainRecordsOutput(b)});
+		                  .batch_train_records = nn_inference_pass->Get()->GetBatchTrainRecordsOutput(b),
+		                  .frame_metrics = frame_metrics});
+		frame_metrics = train_pass->GetFrameMetricsOutput();
 	}
 
 	auto swapchain_image = CreateResource<myvk_rg::SwapchainImage>({"swapchain_image"}, frame_manager);
@@ -91,7 +100,11 @@ NRCRenderGraph::NRCRenderGraph(const myvk::Ptr<myvk::FrameManager> &frame_manage
 	    {"screen_pass"}, ScreenPass::Args{.nrc_state_ptr = m_nrc_state_ptr,
 	                                      .accumulate_image = nrc_resources.accumulate,
 	                                      .color_image = nn_inference_pass->Get()->GetColorOutput(),
-	                                      .screen_image = swapchain_image->Alias()});
+	                                      .before_resolve_image = path_tracer_pass->GetBeforeResolveOutput(),
+	                                      .resolved_pre_overlay_image =
+	                                          nn_inference_pass->Get()->GetResolvedPreOverlayOutput(),
+	                                      .screen_image = swapchain_image->Alias(),
+	                                      .frame_metrics = frame_metrics});
 	auto imgui_pass = CreatePass<myvk_rg::ImGuiPass>({"imgui_pass"}, screen_pass->GetScreenOutput());
 	AddResult({"present"}, imgui_pass->GetImageOutput());
 
@@ -117,12 +130,17 @@ void NRCRenderGraph::PreExecute() const {
 		*GetResource<myvk_rg::ManagedBuffer>({"whiteout_counters"})->GetMappedData<WhiteoutCounters>() = {};
 		m_whiteout_counters_initialized = true;
 	}
+	*GetResource<myvk_rg::ManagedBuffer>({"frame_metrics"})->GetMappedData<FrameMetrics>() = {};
 	for (uint32_t b = 0; b < VkNRCState::GetTrainBatchCount(); ++b)
 		*GetResource<myvk_rg::ManagedBuffer>({"batch_train_count", b})->GetMappedData<uint32_t>() = 0u;
 }
 
 NRCRenderGraph::WhiteoutCounters NRCRenderGraph::GetWhiteoutCounters() const {
 	return *GetResource<myvk_rg::ManagedBuffer>({"whiteout_counters"})->GetMappedData<WhiteoutCounters>();
+}
+
+NRCRenderGraph::FrameMetrics NRCRenderGraph::GetFrameMetrics() const {
+	return *GetResource<myvk_rg::ManagedBuffer>({"frame_metrics"})->GetMappedData<FrameMetrics>();
 }
 
 SceneResources NRCRenderGraph::create_scene_resources() {

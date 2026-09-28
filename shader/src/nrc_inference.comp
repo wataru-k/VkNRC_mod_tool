@@ -1,4 +1,5 @@
 #version 460
+#extension GL_KHR_memory_scope_semantics : enable
 /* #ifndef SUBGROUP_SIZE
 #define SUBGROUP_SIZE 32
 #endif */
@@ -30,10 +31,15 @@ uBatchTrainRecords[NRC_TRAIN_BATCH_COUNT];
 layout(std430, binding = 14) buffer uuWhiteoutCounters {
 	uint invalid_count, overbright_count, max_luminance_bits, evaluated_count;
 };
+layout(std430, binding = 15) buffer uuFrameMetrics { uint uFrameMetrics[]; };
+layout(binding = 16, rgba32f) writeonly uniform image2D uResolvedPreOverlay;
+#include "Diagnostics.glsl"
 
 layout(push_constant) uniform uuPushConstant {
 	uint uWhiteoutDiagnostic, uWhiteoutGuard;
 	float uWhiteoutLuminanceThreshold;
+	uint uNRCContribution;
+	uint uFrameMetricsEnabled;
 };
 
 void main() {
@@ -79,7 +85,15 @@ void main() {
 		ivec2 coord = ivec2(DecodeNRCEvalDstScreen(dst));
 		vec4 bias_factor_r = imageLoad(uBias_FactorR, coord);
 		vec2 factor_gb = imageLoad(uFactorGB, coord).rg;
-		vec3 color = bias_factor_r.rgb + vec3(bias_factor_r.a, factor_gb) * predict;
+		vec3 contribution = vec3(bias_factor_r.a, factor_gb) * predict;
+		vec3 color = bias_factor_r.rgb + (uNRCContribution != 0 ? contribution : vec3(0));
+		if (uFrameMetricsEnabled != 0) {
+			RecordDiagnosticStage(DIAG_RAW_BASE, raw_predict);
+			RecordDiagnosticStage(DIAG_FACTOR_BASE, vec3(bias_factor_r.a, factor_gb));
+			RecordDiagnosticStage(DIAG_CONTRIBUTION_BASE, contribution);
+			RecordDiagnosticStage(DIAG_AFTER_BASE, color);
+		}
+		imageStore(uResolvedPreOverlay, coord, vec4(color, 1));
 		if (uWhiteoutDiagnostic != 0)
 			color = invalid_predict ? vec3(1, 0, 1) : (overbright_predict ? vec3(1, 0, 0) : color);
 		imageStore(uBias_FactorR, coord, vec4(color, 0));
@@ -92,6 +106,9 @@ void main() {
 			vec3 bias = vec3(train_record.bias_r, train_record.bias_g, train_record.bias_b);
 			vec3 factor = vec3(train_record.factor_r, train_record.factor_g, train_record.factor_b);
 			vec3 color = bias + factor * predict;
+			if (uFrameMetricsEnabled != 0) {
+				RecordDiagnosticStage(DIAG_BOOTSTRAP_TARGET_BASE, color);
+			}
 			uBatchTrainRecords[b].records[i].bias_r = color.r;
 			uBatchTrainRecords[b].records[i].bias_g = color.g;
 			uBatchTrainRecords[b].records[i].bias_b = color.b;
